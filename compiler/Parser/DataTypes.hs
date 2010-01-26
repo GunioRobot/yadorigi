@@ -45,7 +45,7 @@ data PrimPatternMatch
     | ListPrimPattern [PatternMatch] {- list pattern -}
     | BindPrimPattern String (Maybe PatternMatch) {- bind pattern, wild card pattern, as pattern -}
     | BracketPrimPattern PatternMatch {- Bracket Pattern -}
-    | PrimPatternWithType PatternMatch DataTypeWithClassInfo
+    | PrimPatternWithType PatternMatch DataTypeWithContext
         {- pattern with data type information -}
 
 
@@ -63,7 +63,7 @@ data PrimExpr
     | LetPrimExpr [PrimLet] Expr {- let expression -}
     | IfPrimExpr Expr Expr Expr {- if expression -}
     | CasePrimExpr Expr [CasePattern] {- case Expression -}
-    | PrimExprWithType Expr DataTypeWithClassInfo {- expression with data type information -}
+    | PrimExprWithType Expr DataTypeWithContext {- expression with data type information -}
 
 data Guard = Guard Expr Expr
 
@@ -76,32 +76,34 @@ data PrimLet = PrimLet PatternMatch ExprOrGuard
 data CasePattern = CasePattern PatternMatch ExprOrGuard
 
 
-data DataTypeWithClassInfo = DataTypeWithClassInfo Position [TypeClassInfo] DataType
+data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
 
-data TypeClassInfo = TypeClassInfo Position ScopedName DataType
+data TypeContext = TypeContext Position ScopedName DataType
 
 data DataType = DataType Position PrimDataType
 
 data PrimDataType
     = PrimVariableType String {- variable type -}
-    | PrimComposedType ScopedName [DataType] {- composed type -}
+    | PrimConstructorType ScopedName {- constructor type -}
+    | PrimReservedConstructorType String {- reserved constructor type -}
+    | PrimComposedType DataType DataType {- composed type -}
     | PrimListType DataType {- list type -}
     | PrimFunctionType DataType DataType {- function type -}
     | PrimBracketType DataType {- bracket type -}
 
-{-
-data Statement = Statement Position PrimStatement
 
-data PrimStatement
-    = PrimImportStmt ModuleName [String]
-    | PrimDataStmt String [String] 
-    | PrimTypeStmt 
+data TopDecl = TopDecl Position PrimTopDecl
 
-data DataStmtOneConstructor = DataStmtOneConstructor String [DataType]
+data PrimTopDecl
+    = PrimDataDecl [TypeContext] String [String] [(String,[DataType])]
+    | PrimTypeDecl [TypeContext] String [String] DataType
+    | PrimClassDecl [TypeContext] String String
+    | PrimInstanceDecl String DataTypeWithContext
+    | PrimTypeSignature String DataTypeWithContext
+    | PrimBindDecl
 
 data Module
-    = Module ModuleName [String] [PrimStatement]
--}
+    = Module ModuleName [ModuleName] [PrimTopDecl]
 
 -- Output Format
 
@@ -160,23 +162,24 @@ instance Show PrimExpr where
     show (CasePrimExpr expr list) = "{case "++show expr++" "++show list++"}"
     show (PrimExprWithType expr dataType) = "("++show expr++"::"++show dataType++")"
 
-instance Show DataTypeWithClassInfo where
-    show (DataTypeWithClassInfo _ [] dataType) = show dataType
-    show (DataTypeWithClassInfo _ [typeClassInfo] dataType) =
-        show typeClassInfo++" => "++show dataType
-    show (DataTypeWithClassInfo _ typeClassInfo dataType) =
-        "("++(concat $ intersperse "," $ map show typeClassInfo)++") => "++show dataType
+instance Show DataTypeWithContext where
+    show (DataTypeWithContext _ [] dataType) = show dataType
+    show (DataTypeWithContext _ [typeContext] dataType) =
+        show typeContext++" => "++show dataType
+    show (DataTypeWithContext _ typeContext dataType) =
+        "("++(concat $ intersperse "," $ map show typeContext)++") => "++show dataType
 
-instance Show TypeClassInfo where
-    show (TypeClassInfo _ typeClass typeName) = show typeClass++" "++show typeName
+instance Show TypeContext where
+    show (TypeContext _ typeClass typeName) = show typeClass++" "++show typeName
 
 instance Show DataType where
     show (DataType _ t) = show t
 
 instance Show PrimDataType where
     show (PrimVariableType str) = str
-    show (PrimComposedType name []) = show name
-    show (PrimComposedType name params) = "("++show name++concatMap ((' ':).show) params++")"
+    show (PrimConstructorType name) = show name
+    show (PrimReservedConstructorType str) = str
+    show (PrimComposedType cons param) = "("++show cons++" "++show param++")"
     show (PrimListType param) = "["++show param++"]"
     show (PrimFunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
     show (PrimBracketType t) = "("++show t++")"
@@ -204,7 +207,7 @@ asPattern pos str = PatternMatch pos.BindPrimPattern str.Just
 bracketPattern :: Position -> PatternMatch -> PatternMatch
 bracketPattern pos = PatternMatch pos.BracketPrimPattern
 
-patternWithType :: Position -> PatternMatch -> DataTypeWithClassInfo -> PatternMatch
+patternWithType :: Position -> PatternMatch -> DataTypeWithContext -> PatternMatch
 patternWithType pos pat = PatternMatch pos.PrimPatternWithType pat
 
 
@@ -241,14 +244,20 @@ ifExpr pos c t = Expr pos.IfPrimExpr c t
 caseExpr :: Position -> Expr -> [CasePattern] -> Expr
 caseExpr pos expr = Expr pos.CasePrimExpr expr
 
-exprWithType :: Position -> Expr -> DataTypeWithClassInfo -> Expr
+exprWithType :: Position -> Expr -> DataTypeWithContext -> Expr
 exprWithType pos expr = Expr pos.PrimExprWithType expr
 
 
 variableType :: Position -> String -> DataType
 variableType pos = DataType pos.PrimVariableType
 
-composedType :: Position -> ScopedName -> [DataType] -> DataType
+constructorType :: Position -> ScopedName -> DataType
+constructorType pos = DataType pos.PrimConstructorType
+
+reservedConstructorType :: Position -> String -> DataType
+reservedConstructorType pos = DataType pos.PrimReservedConstructorType
+
+composedType :: Position -> DataType -> DataType -> DataType
 composedType pos cons = DataType pos.PrimComposedType cons
 
 listType :: Position -> DataType -> DataType
@@ -259,3 +268,4 @@ functionType pos f = DataType pos.PrimFunctionType f
 
 bracketType :: Position -> DataType -> DataType
 bracketType pos = DataType pos.PrimBracketType
+

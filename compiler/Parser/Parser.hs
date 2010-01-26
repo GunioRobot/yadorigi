@@ -156,7 +156,7 @@ exprWithTypeParser layout = let tlayout = tailElemLayout layout in
     do pos <- getPos
        expr <- exprParser 1 layout
        do reservedToken "::" tlayout
-          typeName <- typeWithClassInfoParser tlayout
+          typeName <- typeWithContextParser tlayout
           return $ exprWithType pos expr typeName
           <|> return expr
 
@@ -268,7 +268,7 @@ patternWithTypeParser layout = let tlayout = tailElemLayout layout in
     do pos <- getPos
        head <- patternParser 1 layout
        do reservedToken "::" tlayout
-          typeName <- typeWithClassInfoParser tlayout
+          typeName <- typeWithContextParser tlayout
           return $ patternWithType pos head typeName
           <|> return head
 
@@ -327,14 +327,14 @@ listPatternParser layout = let tlayout = tailElemLayout layout in
 
 -- Type Name Parser
 
-typeWithClassInfoParser :: LayoutInfo -> Parsec TokenStream u DataTypeWithClassInfo
-typeWithClassInfoParser layout = let tlayout = tailElemLayout layout in
-    liftM3 DataTypeWithClassInfo getPos (classInfoParser layout) (typeParser 0 tlayout)
+typeWithContextParser :: LayoutInfo -> Parsec TokenStream u DataTypeWithContext
+typeWithContextParser layout = let tlayout = tailElemLayout layout in
+    liftM3 DataTypeWithContext getPos (classInfoParser layout) (typeParser 0 tlayout)
 
-classInfoParser :: LayoutInfo -> Parsec TokenStream u [TypeClassInfo]
+classInfoParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]
 classInfoParser layout = let tlayout = tailElemLayout layout in option [] $ try $
     do reservedToken "(" layout
-       body <- sepBy1 (liftM3 TypeClassInfo getPos (cNameToken tlayout) (typeParser 0 tlayout))
+       body <- sepBy1 (liftM3 TypeContext getPos (cNameToken tlayout) (typeParser 0 tlayout))
            (reservedToken "," tlayout)
        reservedToken ")" tlayout
        reservedToken "=>" tlayout
@@ -344,7 +344,7 @@ typeParser :: Int -> LayoutInfo -> Parsec TokenStream u DataType
 typeParser 0 = functionTypeParser
 typeParser 1 = choice.flip amap [composedTypeParser,typeParser 2]
 typeParser 2 = choice.flip amap
-    [composedTypeParser1,listTypeParser,bracketTypeParser,variableTypeParser]
+    [listTypeParser,bracketTypeParser,constructorTypeParser,variableTypeParser]
 
 functionTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 functionTypeParser layout = let tlayout = tailElemLayout layout in
@@ -357,27 +357,30 @@ functionTypeParser layout = let tlayout = tailElemLayout layout in
 
 composedTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 composedTypeParser layout = let tlayout = tailElemLayout layout in
-    liftM3 composedType getPos (cNameToken layout) (many $ typeParser 2 tlayout)
-
-composedTypeParser1 :: LayoutInfo -> Parsec TokenStream u DataType
-composedTypeParser1 layout = let tlayout = tailElemLayout layout in
-    liftM3 composedType getPos (cNameToken layout) (return [])
+    do pos <- getPos
+       head <- typeParser 2 layout
+       tail <- many $ typeParser 2 tlayout
+       return $ foldl (composedType pos) head tail
 
 listTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 listTypeParser layout = let tlayout = tailElemLayout layout in
     do pos <- getPos
        reservedToken "[" layout
-       body <- typeParser 0 tlayout
+       result <- (listType pos <$> typeParser 0 tlayout) <|> return (reservedConstructorType pos "[]")
        reservedToken "]" tlayout
-       return $ listType pos body
+       return result
 
 bracketTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 bracketTypeParser layout = let tlayout = tailElemLayout layout in
     do pos <- getPos
        reservedToken "(" layout
-       body <- typeParser 0 tlayout
+       result <- (bracketType pos <$> typeParser 0 tlayout) <|>
+           (reservedToken "->" tlayout >> return (reservedConstructorType pos "->"))
        reservedToken ")" tlayout
-       return $ bracketType pos body
+       return result
+
+constructorTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+constructorTypeParser layout = liftM2 constructorType getPos (cNameToken layout)
 
 variableTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 variableTypeParser layout = liftM2 variableType getPos (unscopedNameToken layout)
