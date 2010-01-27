@@ -17,10 +17,10 @@ reservedStr :: [String]
 reservedStr = reservedWord++reservedSymbol
 
 reservedWord :: [String]
-reservedWord = ["if","then","else","case","of","let","in"]
+reservedWord = ["if","then","else","case","of","let","in","infixl","infix","infixr"]
 
 reservedSymbol :: [String]
-reservedSymbol = ["=","@","\\","->","=>","::","|",",","(",")","[","]"]
+reservedSymbol = ["=","@","\\","->","=>","::","|",",","(",")","[","]","`"]
 
 -- Tokenizer
 

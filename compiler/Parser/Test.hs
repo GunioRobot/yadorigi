@@ -1,6 +1,4 @@
 
-{-# LANGUAGE BangPatterns#-}
-
 module Main where
 
 import Yadorigi.Parser.DataTypes
@@ -25,3 +23,4 @@ main = do contents <- getContents
                          (Right result) -> print result
                          (Left error) -> print error
               (Left error) -> print error
+

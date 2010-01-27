@@ -18,10 +18,11 @@ data ScopedName = ScopedName ModuleName String deriving Eq
 
 
 data Literal
-    = LiteralInt Int
-    | LiteralFloat Float
-    | LiteralChar Char
-    | LiteralString String deriving Eq
+    = LiteralInt Int {- integer literal -}
+    | LiteralFloat Float {- floating point number literal -}
+    | LiteralChar Char {- character literal -}
+    | LiteralString String {- character string literal -}
+        deriving Eq
 
 
 data Token' = Token' SourcePos Token
@@ -36,6 +37,22 @@ data Token
         deriving (Eq,Show)
 
 
+data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
+
+data TypeContext = TypeContext Position ScopedName DataType
+
+data DataType = DataType Position PrimDataType
+
+data PrimDataType
+    = PrimVariableType String {- variable type -}
+    | PrimConstructorType ScopedName {- constructor type -}
+    | PrimReservedConstructorType String {- reserved constructor type -}
+    | PrimComposedType DataType DataType {- composed type -}
+    | PrimListType DataType {- list type -}
+    | PrimFunctionType DataType DataType {- function type -}
+    | PrimParenthesesType DataType {- parentheses type -}
+
+
 data PatternMatch = PatternMatch Position PrimPatternMatch
 
 data PrimPatternMatch
@@ -44,9 +61,8 @@ data PrimPatternMatch
     | DCOpPrimPattern ScopedName PatternMatch PatternMatch {- infix data constructor pattern -}
     | ListPrimPattern [PatternMatch] {- list pattern -}
     | BindPrimPattern String (Maybe PatternMatch) {- bind pattern, wild card pattern, as pattern -}
-    | BracketPrimPattern PatternMatch {- Bracket Pattern -}
-    | PrimPatternWithType PatternMatch DataTypeWithContext
-        {- pattern with data type information -}
+    | ParenthesesPrimPattern PatternMatch {- Parentheses Pattern -}
+    | PrimPatternWithType PatternMatch DataTypeWithContext {- pattern with data type information -}
 
 
 data Expr = Expr Position PrimExpr
@@ -57,7 +73,7 @@ data PrimExpr
     | ApplyFunctionPrimExpr Expr Expr {- apply function expression -}
     | InfixPrimExpr ScopedName Expr Expr {- infix expression -}
     | NegativePrimExpr Expr {- negative expression -}
-    | BracketPrimExpr Expr {- bracket expression -}
+    | ParenthesesPrimExpr Expr {- parentheses expression -}
     | ListPrimExpr [Expr] {- list expression -}
     | LambdaPrimExpr [Lambda] {- lambda expression -}
     | LetPrimExpr [PrimLet] Expr {- let expression -}
@@ -76,31 +92,24 @@ data PrimLet = PrimLet PatternMatch ExprOrGuard
 data CasePattern = CasePattern PatternMatch ExprOrGuard
 
 
-data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
-
-data TypeContext = TypeContext Position ScopedName DataType
-
-data DataType = DataType Position PrimDataType
-
-data PrimDataType
-    = PrimVariableType String {- variable type -}
-    | PrimConstructorType ScopedName {- constructor type -}
-    | PrimReservedConstructorType String {- reserved constructor type -}
-    | PrimComposedType DataType DataType {- composed type -}
-    | PrimListType DataType {- list type -}
-    | PrimFunctionType DataType DataType {- function type -}
-    | PrimBracketType DataType {- bracket type -}
-
-
 data TopDecl = TopDecl Position PrimTopDecl
 
 data PrimTopDecl
     = PrimDataDecl [TypeContext] String [String] [(String,[DataType])]
     | PrimTypeDecl [TypeContext] String [String] DataType
-    | PrimClassDecl [TypeContext] String String
-    | PrimInstanceDecl String DataTypeWithContext
+    | PrimClassDecl [TypeContext] String String [Decl]
+    | PrimInstanceDecl String DataTypeWithContext [Decl]
+    | PrimDecl
+
+data Decl = Decl Position PrimDecl
+
+data PrimDecl
+    = PrimFixityDecl Fixity (Maybe Integer) String
     | PrimTypeSignature String DataTypeWithContext
-    | PrimBindDecl
+    | PrimBindDecl String [PatternMatch] Expr [Decl]
+
+data Fixity = Infixl | Infix | Infixr
+
 
 data Module
     = Module ModuleName [ModuleName] [PrimTopDecl]
@@ -129,7 +138,7 @@ instance Show PrimPatternMatch where
     show (ListPrimPattern list) = show list
     show (BindPrimPattern str Nothing) = str
     show (BindPrimPattern str (Just pattern)) = "("++str++"@"++show pattern++")"
-    show (BracketPrimPattern pattern) = "("++show pattern++")"
+    show (ParenthesesPrimPattern pattern) = "("++show pattern++")"
     show (PrimPatternWithType pattern typeName) = "("++show pattern++show typeName++")"
 
 instance Show Lambda where
@@ -154,7 +163,7 @@ instance Show PrimExpr where
     show (ApplyFunctionPrimExpr func param) = "("++show func++" "++show param++")"
     show (InfixPrimExpr name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
     show (NegativePrimExpr expr) = "-"++show expr
-    show (BracketPrimExpr expr) = "("++show expr++")"
+    show (ParenthesesPrimExpr expr) = "("++show expr++")"
     show (ListPrimExpr list) = show list
     show (LambdaPrimExpr list) = "(\\"++(concat $ intersperse " | " $ map show list)++")"
     show (LetPrimExpr list expr) = "{let "++show list++" "++show expr++"}"
@@ -182,7 +191,7 @@ instance Show PrimDataType where
     show (PrimComposedType cons param) = "("++show cons++" "++show param++")"
     show (PrimListType param) = "["++show param++"]"
     show (PrimFunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
-    show (PrimBracketType t) = "("++show t++")"
+    show (PrimParenthesesType t) = "("++show t++")"
 
 -- Composed Data Constructors
 
@@ -204,8 +213,8 @@ bindPattern pos str = PatternMatch pos $ BindPrimPattern str Nothing
 asPattern :: Position -> String -> PatternMatch -> PatternMatch
 asPattern pos str = PatternMatch pos.BindPrimPattern str.Just
 
-bracketPattern :: Position -> PatternMatch -> PatternMatch
-bracketPattern pos = PatternMatch pos.BracketPrimPattern
+parenthesesPattern :: Position -> PatternMatch -> PatternMatch
+parenthesesPattern pos = PatternMatch pos.ParenthesesPrimPattern
 
 patternWithType :: Position -> PatternMatch -> DataTypeWithContext -> PatternMatch
 patternWithType pos pat = PatternMatch pos.PrimPatternWithType pat
@@ -226,8 +235,8 @@ infixExpr pos name expr = Expr pos.InfixPrimExpr name expr
 negativeExpr :: Position -> Expr -> Expr
 negativeExpr pos = Expr pos.NegativePrimExpr
 
-bracketExpr :: Position -> Expr -> Expr
-bracketExpr pos = Expr pos.BracketPrimExpr
+parenthesesExpr :: Position -> Expr -> Expr
+parenthesesExpr pos = Expr pos.ParenthesesPrimExpr
 
 listExpr :: Position -> [Expr] -> Expr
 listExpr pos = Expr pos.ListPrimExpr
@@ -266,6 +275,6 @@ listType pos = DataType pos.PrimListType
 functionType :: Position -> DataType -> DataType -> DataType
 functionType pos f = DataType pos.PrimFunctionType f
 
-bracketType :: Position -> DataType -> DataType
-bracketType pos = DataType pos.PrimBracketType
+parenthesesType :: Position -> DataType -> DataType
+parenthesesType pos = DataType pos.PrimParenthesesType
 
