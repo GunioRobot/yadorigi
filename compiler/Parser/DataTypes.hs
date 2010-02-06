@@ -99,14 +99,14 @@ data PrimTopDecl
     | PrimTypeDecl [TypeContext] String [String] DataType
     | PrimClassDecl [TypeContext] String String [Decl]
     | PrimInstanceDecl String DataTypeWithContext [Decl]
-    | PrimDecl
+    | PrimDeclDecl PrimDecl
 
 data Decl = Decl Position PrimDecl
 
 data PrimDecl
-    = PrimFixityDecl Fixity (Maybe Integer) String
+    = PrimFixityDecl Fixity (Maybe Int) [ScopedName]
     | PrimTypeSignature String DataTypeWithContext
-    | PrimBindDecl String [PatternMatch] Expr [Decl]
+    | PrimBindDecl String [PatternMatch] [Guard] [Decl]
 
 data Fixity = Infixl | Infix | Infixr
 
@@ -277,4 +277,31 @@ functionType pos f = DataType pos.PrimFunctionType f
 
 parenthesesType :: Position -> DataType -> DataType
 parenthesesType pos = DataType pos.PrimParenthesesType
+
+
+dataDecl :: Position -> [TypeContext] -> String -> [String] -> [(String,[DataType])] -> TopDecl
+dataDecl pos context typeName params = TopDecl pos.PrimDataDecl context typeName params
+
+typeDecl :: Position -> [TypeContext] -> String -> [String] -> DataType -> TopDecl
+typeDecl pos context typeName params = TopDecl pos.PrimTypeDecl context typeName params
+
+classDecl :: Position -> [TypeContext] -> String -> String -> [Decl] -> TopDecl
+classDecl pos context className typeVar = TopDecl pos.PrimClassDecl context className typeVar
+
+instanceDecl :: Position -> String -> DataTypeWithContext -> [Decl] -> TopDecl
+instanceDecl pos className typeName = TopDecl pos.PrimInstanceDecl className typeName
+
+
+declToTopDecl :: Decl -> TopDecl
+declToTopDecl (Decl pos decl) = TopDecl pos $ PrimDeclDecl decl
+
+
+fixityDecl :: Position -> Fixity -> (Maybe Int) -> [ScopedName] -> Decl
+fixityDecl pos fixity level = Decl pos.PrimFixityDecl fixity level
+
+typeSignature :: Position -> String -> DataTypeWithContext -> Decl
+typeSignature pos name = Decl pos.PrimTypeSignature name
+
+bindDecl :: Position -> String -> [PatternMatch] -> [Guard] -> [Decl] -> Decl
+bindDecl pos name params body = Decl pos.PrimBindDecl name params body
 

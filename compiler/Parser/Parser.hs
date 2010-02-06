@@ -67,16 +67,12 @@ nameToken = getToken f
 
 cNameToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 cNameToken = getToken f
-    where f (NameToken name@(ScopedName _ str))
-              | isUpper (head str) = Just name
-              | otherwise = Nothing
+    where f (NameToken name@(ScopedName _ str)) | isUpper (head str) = Just name
           f _ = Nothing
 
 vNameToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 vNameToken = getToken f
-    where f (NameToken name@(ScopedName _ str))
-              | isLower (head str) || '_' == (head str) = Just name
-              | otherwise = Nothing
+    where f (NameToken name@(ScopedName _ str)) | isLower (head str) || '_' == (head str) = Just name
           f _ = Nothing
 
 unscopedNameToken :: LayoutInfo -> Parsec TokenStream u String
@@ -86,16 +82,12 @@ unscopedNameToken = getToken f
 
 unscopedcNameToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedcNameToken = getToken f
-    where f (NameToken (ScopedName [] str))
-              | isUpper (head str) = Just str
-              | otherwise = Nothing
+    where f (NameToken (ScopedName [] str)) | isUpper (head str) = Just str
           f _ = Nothing
 
 unscopedvNameToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedvNameToken = getToken f
-    where f (NameToken (ScopedName [] str))
-              | isLower (head str) || '_' == (head str) = Just str
-              | otherwise = Nothing
+    where f (NameToken (ScopedName [] str)) | isLower (head str) || '_' == (head str) = Just str
           f _ = Nothing
 
 opToken :: LayoutInfo -> Parsec TokenStream u ScopedName
@@ -105,16 +97,12 @@ opToken = getToken f
 
 cOpToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 cOpToken = getToken f
-    where f (OpToken op@(ScopedName _ str))
-              | head str == ':'  = Just op
-              | otherwise = Nothing
+    where f (OpToken op@(ScopedName _ str)) | head str == ':' = Just op
           f _ = Nothing
 
 vOpToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 vOpToken = getToken f
-    where f (OpToken op@(ScopedName _ str))
-              | head str /= ':'  = Just op
-              | otherwise = Nothing
+    where f (OpToken op@(ScopedName _ str)) | head str /= ':' = Just op
           f _ = Nothing
 
 unscopedOpToken :: LayoutInfo -> Parsec TokenStream u String
@@ -124,29 +112,22 @@ unscopedOpToken = getToken f
 
 unscopedcOpToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedcOpToken = getToken f
-    where f (OpToken (ScopedName [] str))
-              | head str == ':' = Just str
-              | otherwise = Nothing
+    where f (OpToken (ScopedName [] str)) | head str == ':' = Just str
           f _ = Nothing
 
 unscopedvOpToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedvOpToken = getToken f
-    where f (OpToken (ScopedName [] str))
-              | head str /= ':' = Just str
-              | otherwise = Nothing
+    where f (OpToken (ScopedName [] str)) | head str /= ':' = Just str
           f _ = Nothing
 
 fixedOpToken :: String -> LayoutInfo -> Parsec TokenStream u ScopedName
 fixedOpToken str = getToken f
-    where f (OpToken op@(ScopedName _ str'))
-              | str == str' = Just op
-              | otherwise = Nothing
+    where f (OpToken op@(ScopedName _ str')) | str == str' = Just op
           f _ = Nothing
 
 reservedToken :: String -> LayoutInfo -> Parsec TokenStream u Token
 reservedToken s = getToken f
     where f t@(ReservedToken s') | s == s' = Just t
-                                 | otherwise = Nothing
           f _ = Nothing
 
 -- Name and Operator Parser
@@ -257,7 +238,7 @@ opExprParser layout = let tlayout = tailElemLayout layout in
           return $ infixExpr pos op head tail
           <|> return head
     <|> liftM3 (\pos _ body -> negativeExpr pos body)
-            getPos (fixedOpToken "-" layout) (opExprParser tlayout)
+        getPos (fixedOpToken "-" layout) (opExprParser tlayout)
 
 lambdaExprParser :: LayoutInfo -> Parsec TokenStream u Expr
 lambdaExprParser layout =
@@ -281,8 +262,7 @@ literalParser :: LayoutInfo -> Parsec TokenStream u Expr
 literalParser layout = liftM2 literalExpr (getPosWithTest layout) (literalToken layout)
 
 parenthesesParser :: LayoutInfo -> Parsec TokenStream u Expr
-parenthesesParser layout =
-    liftM2 parenthesesExpr getPos (layoutParenthesess layout (exprParser 0))
+parenthesesParser layout = liftM2 parenthesesExpr getPos (layoutParenthesess layout (exprParser 0))
 
 listParser :: LayoutInfo -> Parsec TokenStream u Expr
 listParser layout = let tlayout = tailElemLayout layout in
@@ -409,10 +389,10 @@ listPatternParser layout = let tlayout = tailElemLayout layout in
 
 typeWithContextParser :: LayoutInfo -> Parsec TokenStream u DataTypeWithContext
 typeWithContextParser layout = let tlayout = tailElemLayout layout in
-    liftM3 DataTypeWithContext getPos (classInfoParser layout) (typeParser 0 tlayout)
+    liftM3 DataTypeWithContext getPos (contextParser layout) (typeParser 0 tlayout)
 
-classInfoParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]
-classInfoParser layout = let tlayout = tailElemLayout layout in option [] $ try $
+contextParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]
+contextParser layout = let tlayout = tailElemLayout layout in option [] $ try $
     do reservedToken "(" layout
        body <- sepBy1 (liftM3 TypeContext getPos (cNameParser tlayout) (typeParser 0 tlayout))
            (reservedToken "," tlayout)
@@ -471,27 +451,38 @@ variableTypeParser layout = liftM2 variableType getPos (unscopedvNameParser layo
 globalParser :: Parsec TokenStream u Expr
 globalParser = exprParser 0 arbitraryLayout <* eof
 
-{-
 topDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
-topDeclParser layout = undefined
+topDeclParser = dataDeclParser
 
-
-
+dataDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
+dataDeclParser layout = let tlayout = tailElemLayout layout in
+    do pos <- getPos
+       reservedToken "data" layout
+       context <- contextParser tlayout
+       typeName <- unscopedcNameToken tlayout
+       params <- many $ unscopedvNameToken tlayout
+       reservedToken "=" tlayout
+       constructors <- sepBy1
+           (liftM2 (,) (unscopedcNameToken tlayout) (many $ typeParser 2 tlayout))
+           (reservedToken "|" tlayout)
+       return $ dataDecl pos context typeName params constructors
 
 fixityDeclParser :: LayoutInfo -> Parsec TokenStream u Decl
 fixityDeclParser layout = let tlayout = tailElemLayout layout in
     do pos <- getPos
        fixity <- fixityParser layout
        num <- option Nothing (Just <$> operatorLevelParser tlayout)
+       ops <- sepBy1 (opParser tlayout) (reservedToken "," tlayout)
+       return $ fixityDecl pos fixity num ops
     where
         fixityParser :: LayoutInfo -> Parsec TokenStream u Fixity
         fixityParser layout = (reservedToken "infixl" layout >> return Infixl) <|>
             (reservedToken "infix" layout >> return Infix) <|>
             (reservedToken "infixr" layout >> return Infixr)
         operatorLevelParser :: LayoutInfo -> Parsec TokenStream u Int
-        operatorLevelParser layout = getToken operatorLevelTest
+        operatorLevelParser layout = getToken operatorLevelTest layout
         operatorLevelTest (LiteralToken (LiteralInt num))
             | (0 <= num && num <= 9) = Just num
             | otherwise = Nothing
         operatorLevelTest _ = Nothing
--}
+
