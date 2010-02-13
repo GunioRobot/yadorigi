@@ -17,7 +17,8 @@ reservedStr :: [String]
 reservedStr = reservedWord++reservedSymbol
 
 reservedWord :: [String]
-reservedWord = ["if","then","else","case","of","let","in","data","type","infixl","infix","infixr"]
+reservedWord = ["if","then","else","case","of","let","in",
+    "data","type","class","instance","infixl","infix","infixr","where"]
 
 reservedSymbol :: [String]
 reservedSymbol = ["=","@","\\","->","=>","::","|",",","(",")","[","]","`"]

@@ -14,11 +14,11 @@ import Control.Monad
 
 main :: IO ()
 main = do contents <- getContents
-          tokenizerResult <- return $ runParser tokenizer () "<interactive>" contents
+          let tokenizerResult = runParser tokenizer () "<interactive>" contents
           case tokenizerResult of
               (Right ts) ->
                   do sequence_ (map print ts)
-                     parserResult <- return $ runParser globalParser () "<tokenStream>" ts
+                     let parserResult = runParser moduleParser () "<tokenStream>" ts
                      case parserResult of
                          (Right result) -> print result
                          (Left error) -> print error
