@@ -18,7 +18,7 @@ reservedStr = reservedWord++reservedSymbol
 
 reservedWord :: [String]
 reservedWord = ["if","then","else","case","of","let","in",
-    "data","type","class","instance","infixl","infix","infixr","where"]
+    "module","import","data","type","class","instance","infixl","infix","infixr","where"]
 
 reservedSymbol :: [String]
 reservedSymbol = ["=","@","\\","->","=>","::","|",",","(",")","[","]","`"]
@@ -38,10 +38,10 @@ tokenizer = between spacesAndComments eof (many getToken)
 -- Spaces and Comments
 
 lineComment :: Parsec String u ()
-lineComment = try $ string "--" >> manyTill anyChar (forever (char '\n') <|> eof) >> return ()
+lineComment = try $ const () <$> (string "--" >> manyTill anyChar ((const () <$> char '\n') <|> eof))
 
 blockComment :: Parsec String u ()
-blockComment = try $ string "{-" >> manyTill anyChar (try (string "-}")) >> return ()
+blockComment = try $ const () <$> (string "{-" >> manyTill anyChar (try (string "-}")))
 
 spacesAndComments :: Parsec String u ()
 spacesAndComments = (skipMany $ (const () <$> space) <|> lineComment <|> blockComment) <?> "comment"
@@ -52,7 +52,7 @@ literalTokenizer :: Parsec String u Token
 literalTokenizer = LiteralToken <$> (numLiteralTokenizer <|> stringTokenizer <|> charTokenizer)
 
 numLiteralTokenizer :: Parsec String u Literal
-numLiteralTokenizer = (char '0' >> (octTokenizer <|> hexTokenizer)) <|> decTokenizer
+numLiteralTokenizer = try (char '0' >> (octTokenizer <|> hexTokenizer)) <|> decTokenizer
 
 decTokenizer :: Parsec String u Literal
 decTokenizer =

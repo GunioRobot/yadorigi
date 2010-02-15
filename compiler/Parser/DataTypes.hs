@@ -9,7 +9,7 @@ import Data.List
 
 data Position = Position Int Int deriving Show
 
-data LayoutInfo = LayoutInfo Bool Int
+type LayoutInfo = Either Int Int
 
 
 type ModuleName = [String]
@@ -59,6 +59,7 @@ data PrimPatternMatch
     = DCPrimPattern ScopedName [PatternMatch] {- data constructor pattern -}
     | LiteralPrimPattern Literal {- literal pattern -}
     | DCOpPrimPattern ScopedName PatternMatch PatternMatch {- infix data constructor pattern -}
+    | NegativePrimPattern PatternMatch {- negative pattern -}
     | ListPrimPattern [PatternMatch] {- list pattern -}
     | BindPrimPattern String (Maybe PatternMatch) {- bind pattern, wild card pattern, as pattern -}
     | ParenthesesPrimPattern PatternMatch {- Parentheses Pattern -}
@@ -107,7 +108,7 @@ data PrimDecl
     = PrimFixityDecl Fixity (Maybe Int) [ScopedName]
     | PrimTypeSignature String DataTypeWithContext
     | PrimBindDecl String [PatternMatch] ExprOrGuard [Decl]
-    | PrimInfixBindDecl String PatternMatch PatternMatch ExprOrGuard [Decl]
+    | PrimInfixBindDecl PatternMatch ExprOrGuard [Decl]
     | PrimPatternBindDecl PatternMatch ExprOrGuard [Decl]
 
 data Fixity = Infixl | Infix | Infixr deriving Show
@@ -204,12 +205,14 @@ instance Show PrimTopDecl where
         intercalate " | " (map (\(s,l) -> s++concatMap ((' ':).show) l) body)
     show (PrimTypeDecl str param typeName) =
         "type "++str++intercalate " " param++" = "++show typeName
-    show (PrimClassDecl [] className typeName body) = "class"++className++" "++typeName++
-        concatMap ("    "++) (body>>=(lines.show))
-    show (PrimClassDecl context className typeName body) = "class"++show context++" => "++
-        className++" "++typeName++concatMap ("    "++) (body>>=(lines.show))
-    show (PrimInstanceDecl context className typeName body) = "instance"++show context++" => "++
-        className++" "++show typeName++concatMap ("    "++) (body>>=(lines.show))
+    show (PrimClassDecl [] className typeName body) = "class "++className++" "++typeName++
+        " where"++concatMap ("\n    "++) (body>>=(lines.show))
+    show (PrimClassDecl context className typeName body) = "class "++show context++" => "++
+        className++" "++typeName++" where"++concatMap ("\n    "++) (body>>=(lines.show))
+    show (PrimInstanceDecl [] className typeName body) = "instance "++className++
+        " "++show typeName++" where"++concatMap ("\n    "++) (body>>=(lines.show))
+    show (PrimInstanceDecl context className typeName body) = "instance "++show context++" => "++
+        className++" "++show typeName++" where"++concatMap ("\n    "++) (body>>=(lines.show))
     show (PrimDeclDecl decl) = show decl
 
 instance Show Decl where
@@ -222,20 +225,19 @@ instance Show PrimDecl where
     show (PrimBindDecl str params body []) = str++" "++show params++" = "++show body
     show (PrimBindDecl str params body whereClause) = str++" "++show params++" = "++show body++
         concatMap ("    "++) (whereClause>>=(lines.show))
-    show (PrimInfixBindDecl op leftParam rightParam body []) =
-        show leftParam++" "++op++" "++show rightParam++show body
-    show (PrimInfixBindDecl op leftParam rightParam body whereClause) = show leftParam++" "++
-        op++" "++show rightParam++show body++concatMap ("    "++) (whereClause>>=(lines.show))
+    show (PrimInfixBindDecl lhs body []) = show lhs++" = "++show body
+    show (PrimInfixBindDecl lhs body whereClause) = show lhs++" = "++
+        show body++concatMap ("    "++) (whereClause>>=(lines.show))
     show (PrimPatternBindDecl pat body []) = show pat++" = "++show body
     show (PrimPatternBindDecl pat body whereClause) = show pat++" = "++show body++
         concatMap ("    "++) (whereClause>>=(lines.show))
 
 instance Show Module where
     show (Module [] imports decls) = concatMap ((++"\n").("import "++).intercalate ".") imports++
-        "\n\n"++concatMap ((++"\n").show) decls
-    show (Module modname imports decls) = "module "++concatMap (++".") modname++"\n\n"++
+        "\n"++concatMap ((++"\n").show) decls
+    show (Module modname imports decls) = "module "++intercalate "." modname++" where\n"++
         concatMap ((++"\n").("import "++).intercalate ".") imports++
-        "\n\n"++concatMap ((++"\n").show) decls
+        "\n"++concatMap ((++"\n").show) decls
 
 -- Composed Data Constructors
 
@@ -247,6 +249,9 @@ literalPattern pos = PatternMatch pos.LiteralPrimPattern
 
 dcOpPattern :: Position -> ScopedName -> PatternMatch -> PatternMatch -> PatternMatch
 dcOpPattern pos name pat = PatternMatch pos.DCOpPrimPattern name pat
+
+negativePattern :: Position -> PatternMatch -> PatternMatch
+negativePattern pos = PatternMatch pos.NegativePrimPattern
 
 listPattern :: Position -> [PatternMatch] -> PatternMatch
 listPattern pos = PatternMatch pos.ListPrimPattern
@@ -350,10 +355,8 @@ typeSignatureDecl pos name = Decl pos.PrimTypeSignature name
 bindDecl :: Position -> String -> [PatternMatch] -> ExprOrGuard -> [Decl] -> Decl
 bindDecl pos name params body = Decl pos.PrimBindDecl name params body
 
-infixBindDecl ::
-    Position -> String -> PatternMatch -> PatternMatch -> ExprOrGuard -> [Decl] -> Decl
-infixBindDecl pos name leftPat rightPat body =
-    Decl pos.PrimInfixBindDecl name leftPat rightPat body
+infixBindDecl :: Position -> PatternMatch -> ExprOrGuard -> [Decl] -> Decl
+infixBindDecl pos lhs body = Decl pos.PrimInfixBindDecl lhs body
 
 patternBindDecl :: Position -> PatternMatch -> ExprOrGuard -> [Decl] -> Decl
 patternBindDecl pos pattern body = Decl pos.PrimPatternBindDecl pattern body

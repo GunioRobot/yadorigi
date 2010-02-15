@@ -29,17 +29,18 @@ getPosWithTest layout =
 -- Layout
 
 arbitraryLayout :: LayoutInfo
-arbitraryLayout = LayoutInfo False 0
+arbitraryLayout = Left 1
 
 checkLayout :: LayoutInfo -> Position -> Bool
-checkLayout (LayoutInfo False n) (Position line column) = n <= column
-checkLayout (LayoutInfo True n) (Position line column) = n == column
+checkLayout (Left n) (Position line column) = n <= column
+checkLayout (Right n) (Position line column) = n == column
 
 arbitraryElemLayout :: LayoutInfo -> LayoutInfo
-arbitraryElemLayout (LayoutInfo t n) = LayoutInfo False n
+arbitraryElemLayout (Right n) = Left n
+arbitraryElemLayout layout = layout
 
 tailElemLayout :: LayoutInfo -> LayoutInfo
-tailElemLayout (LayoutInfo True n) = LayoutInfo False (n+1)
+tailElemLayout (Right n) = Left (n+1)
 tailElemLayout layout = layout
 
 -- Tokenizer
@@ -181,13 +182,13 @@ moduleNameParser layout =
 
 -- Parser Combinators
 
-layoutMany :: LayoutInfo -> (LayoutInfo -> Parsec [s] u a) -> Parsec [s] u [a]
-layoutMany layout parser =
-    getPosWithTest layout >>= (\(Position _ col) -> many $ parser $ LayoutInfo True col)
+offsideRuleMany :: LayoutInfo -> (LayoutInfo -> Parsec [s] u a) -> Parsec [s] u [a]
+offsideRuleMany layout parser =
+    (getPosWithTest layout >>= \(Position _ col) -> many $ parser $ Right col) <|> return []
 
-layoutMany1 :: LayoutInfo -> (LayoutInfo -> Parsec [s] u a) -> Parsec [s] u [a]
-layoutMany1 layout parser =
-    getPosWithTest layout >>= (\(Position _ col) -> many1 $ parser $ LayoutInfo True col)
+offsideRuleMany1 :: LayoutInfo -> (LayoutInfo -> Parsec [s] u a) -> Parsec [s] u [a]
+offsideRuleMany1 layout parser =
+    getPosWithTest layout >>= (\(Position _ col) -> many1 $ parser $ Right col)
 
 layoutParentheses :: LayoutInfo -> (LayoutInfo -> Parsec TokenStream u a) -> Parsec TokenStream u a
 layoutParentheses layout parser = let tlayout = tailElemLayout layout in
@@ -201,61 +202,60 @@ layoutBackquotes :: LayoutInfo -> (LayoutInfo -> Parsec TokenStream u a) -> Pars
 layoutBackquotes layout parser = let tlayout = tailElemLayout layout in
     between (reservedToken "`" layout) (reservedToken "`" tlayout) (parser tlayout)
 
+layoutChoice :: [LayoutInfo -> Parsec TokenStream u a] -> LayoutInfo -> Parsec TokenStream u a
+layoutChoice list layout = choice $ amap layout list
+
 -- Expression Parser
 
 exprParser :: Int -> LayoutInfo -> Parsec TokenStream u Expr
 exprParser 0 = exprWithTypeParser
 exprParser 1 = opExprParser
-exprParser 2 = choice.flip amap [lambdaExprParser,exprParser 3]
-exprParser 3 = choice.flip amap [letParser,ifParser,caseParser,exprParser 4]
+exprParser 2 = layoutChoice [lambdaExprParser,exprParser 3]
+exprParser 3 = layoutChoice [letParser,ifParser,caseParser,exprParser 4]
 exprParser 4 = applyParser
-exprParser 5 = choice.flip amap [nameExprParser,literalParser,parenthesesParser,listParser]
+exprParser 5 = layoutChoice [nameExprParser,literalParser,parenthesesParser,listParser]
 
 exprOrGuardParser :: String -> LayoutInfo -> Parsec TokenStream u ExprOrGuard
 exprOrGuardParser str layout = let tlayout = tailElemLayout layout in
-    (reservedToken str layout >> Left <$> exprParser 0 tlayout) <|>
-        (Right <$> layoutMany1 layout (guardParser str))
-    where guardParser str layout = let tlayout = tailElemLayout layout in
-              do reservedToken "|" layout
-                 cond <- exprParser 0 tlayout
-                 reservedToken str tlayout
-                 expr <- exprParser 0 tlayout
-                 return $ Guard cond expr
+    (reservedToken str layout >> (Left <$> exprParser 0 tlayout)) <|>
+        (Right <$> offsideRuleMany1 layout (guardParser str))
+    where guardParser str layout = do
+              let tlayout = tailElemLayout layout
+              reservedToken "|" layout
+              cond <- exprParser 0 tlayout
+              reservedToken str tlayout
+              expr <- exprParser 0 tlayout
+              return $ Guard cond expr
 
 exprWithTypeParser :: LayoutInfo -> Parsec TokenStream u Expr
-exprWithTypeParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       expr <- exprParser 1 layout
-       do reservedToken "::" tlayout
-          typeName <- typeWithContextParser tlayout
-          return $ exprWithType pos expr typeName
-          <|> return expr
+exprWithTypeParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    expr <- exprParser 1 layout
+    option expr $
+        reservedToken "::" tlayout >> (exprWithType pos expr <$> typeWithContextParser tlayout)
 
 opExprParser :: LayoutInfo -> Parsec TokenStream u Expr
-opExprParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       head <- exprParser 2 layout
-       do op <- opParser tlayout
-          tail <- opExprParser tlayout
-          return $ infixExpr pos op head tail
-          <|> return head
-    <|> liftM3 (\pos _ body -> negativeExpr pos body)
-        getPos (fixedOpToken "-" layout) (opExprParser tlayout)
+opExprParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    head <- exprParser 2 layout <|>
+        (negativeExpr pos <$> (fixedOpToken "-" layout >> exprParser 2 tlayout))
+    option head $ liftM3 (infixExpr pos) (opParser tlayout) (return head) (opExprParser tlayout)
 
 lambdaExprParser :: LayoutInfo -> Parsec TokenStream u Expr
-lambdaExprParser layout =
-    do pos <- getPos
-       reservedToken "\\" layout
-       body <- sepBy1 oneLambda (reservedToken "|" tlayout)
-       return $ lambdaExpr pos body
-    where
-        tlayout = tailElemLayout layout
-        oneLambda =
-            do pos <- getPos
-               params <- many1PatternParser tlayout
-               reservedToken "->" tlayout
-               expr <- exprParser 0 tlayout
-               return $ Lambda pos params expr
+lambdaExprParser layout = do
+    pos <- getPos
+    reservedToken "\\" layout
+    body <- sepBy1 oneLambda (reservedToken "|" tlayout)
+    return $ lambdaExpr pos body
+    where tlayout = tailElemLayout layout
+          oneLambda = do
+              pos <- getPos
+              params <- many1PatternParser tlayout
+              reservedToken "->" tlayout
+              expr <- exprParser 0 tlayout
+              return $ Lambda pos params expr
 
 nameExprParser :: LayoutInfo -> Parsec TokenStream u Expr
 nameExprParser layout = liftM2 nameExpr (getPosWithTest layout) (nameParser layout)
@@ -271,35 +271,38 @@ listParser layout = liftM2 listExpr getPos
     (layoutBracket layout (\l -> sepBy (exprParser 0 l) (reservedToken "," l)))
 
 letParser :: LayoutInfo -> Parsec TokenStream u Expr
-letParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "let" layout
-       list <- layoutMany1 tlayout let1Parser
-       reservedToken "in" tlayout
-       expr <- exprParser 0 tlayout
-       return $ letExpr pos list expr
+letParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "let" layout
+    list <- offsideRuleMany1 tlayout let1Parser
+    reservedToken "in" tlayout
+    expr <- exprParser 0 tlayout
+    return $ letExpr pos list expr
     where let1Parser layout = let tlayout = tailElemLayout layout in
               liftM2 PrimLet (aPatternParser layout) (exprOrGuardParser "=" tlayout)
 
 ifParser :: LayoutInfo -> Parsec TokenStream u Expr
-ifParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "if" layout
-       c <- exprParser 0 tlayout
-       reservedToken "then" tlayout
-       t <- exprParser 0 tlayout
-       reservedToken "else" tlayout
-       f <- exprParser 0 tlayout
-       return $ ifExpr pos c t f
+ifParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "if" layout
+    c <- exprParser 0 tlayout
+    reservedToken "then" tlayout
+    t <- exprParser 0 tlayout
+    reservedToken "else" tlayout
+    f <- exprParser 0 tlayout
+    return $ ifExpr pos c t f
 
 caseParser :: LayoutInfo -> Parsec TokenStream u Expr
-caseParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "case" layout
-       expr <- exprParser 0 tlayout
-       reservedToken "of" tlayout
-       list <- layoutMany1 tlayout casePatternParser
-       return $ caseExpr pos expr list
+caseParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "case" layout
+    expr <- exprParser 0 tlayout
+    reservedToken "of" tlayout
+    list <- offsideRuleMany1 tlayout casePatternParser
+    return $ caseExpr pos expr list
     where casePatternParser layout = let tlayout = tailElemLayout layout in
               liftM2 CasePattern (aPatternParser layout) (exprOrGuardParser "->" tlayout)
 
@@ -314,44 +317,47 @@ aPatternParser = patternParser 0
 
 many1PatternParser :: LayoutInfo -> Parsec TokenStream u [PatternMatch]
 many1PatternParser layout = let tlayout = tailElemLayout layout in
-    do liftM2 (:) (patternParser 3 layout) (many $ patternParser 3 tlayout)
+    liftM2 (:) (patternParser 3 layout) (many $ patternParser 3 tlayout)
 
 patternParser :: Int -> LayoutInfo -> Parsec TokenStream u PatternMatch
 patternParser 0 = patternWithTypeParser
 patternParser 1 = opPatternParser
-patternParser 2 = choice.flip amap [dcPatternParser,patternParser 3]
-patternParser 3 = choice.flip amap [literalPatternParser,asPatternParser,
-    parenthesesPatternParser,listPatternParser,singleDCPatternParser]
+patternParser 2 = layoutChoice [dcPatternParser,patternParser 3]
+patternParser 3 = layoutChoice [literalPatternParser
+    ,asPatternParser,parenthesesPatternParser,listPatternParser,singleDCPatternParser]
 
 patternWithTypeParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
-patternWithTypeParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       head <- patternParser 1 layout
-       do reservedToken "::" tlayout
-          typeName <- typeWithContextParser tlayout
-          return $ patternWithType pos head typeName
-          <|> return head
+patternWithTypeParser = patternWithTypeParser' opPatternParser
+
+patternWithTypeParser' :: (LayoutInfo -> Parsec TokenStream u PatternMatch) ->
+    LayoutInfo -> Parsec TokenStream u PatternMatch
+patternWithTypeParser' childParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    head <- childParser layout
+    option head $ reservedToken "::" tlayout >>
+        (patternWithType pos head <$> typeWithContextParser tlayout)
 
 opPatternParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
-opPatternParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       do head <- patternParser 2 layout
-          do cons <- cOpToken tlayout <|> fixedOpToken "+" tlayout
-             tail <- opPatternParser tlayout
-             return $ dcOpPattern pos cons head tail
-             <|> return head
-        <|> do fixedOpToken "-" layout
-               num <- numLiteralToken tlayout
-               return $ literalPattern pos $ case num of
-                   (LiteralInt n) -> LiteralInt $ -n
-                   (LiteralFloat n) -> LiteralFloat $ -n
+opPatternParser = opPatternParser' $ layoutChoice [cOpToken,fixedOpToken "+"]
+
+opPatternParser' :: (LayoutInfo -> Parsec TokenStream u ScopedName) ->
+    LayoutInfo -> Parsec TokenStream u PatternMatch
+opPatternParser' opParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    head <- patternParser 2 layout <|>
+        (fixedOpToken "-" layout >> (negativePattern pos <$> patternParser 2 layout))
+    option head $ liftM3 (dcOpPattern pos)
+        (opParser tlayout) (return head) (opPatternParser' opParser tlayout)
 
 dcPatternParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
-dcPatternParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       cons <- cNameParser layout
-       body <- many (patternParser 3 tlayout)
-       return $ dcPattern pos cons body
+dcPatternParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    cons <- cNameParser layout
+    body <- many (patternParser 3 tlayout)
+    return $ dcPattern pos cons body
 
 literalPatternParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
 literalPatternParser layout =
@@ -361,10 +367,8 @@ asPatternParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
 asPatternParser layout = let tlayout = tailElemLayout layout in
     do pos <- getPos
        var <- unscopedvNameParser layout
-       do reservedToken "@" tlayout
-          pattern <- patternParser 2 tlayout
-          return $ asPattern pos var pattern
-          <|> return (bindPattern pos var)
+       option (bindPattern pos var)
+           (reservedToken "@" tlayout >> (asPattern pos var <$> patternParser 2 tlayout))
 
 singleDCPatternParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
 singleDCPatternParser layout = liftM3 dcPattern getPos (cNameParser layout) (return [])
@@ -384,53 +388,54 @@ typeWithContextParser layout = let tlayout = tailElemLayout layout in
     liftM3 DataTypeWithContext getPos (contextParser layout) (typeParser 0 tlayout)
 
 contextParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]
-contextParser layout = let tlayout = tailElemLayout layout in option [] $ try $
-    do reservedToken "(" layout
-       body <- sepBy1 (liftM3 TypeContext getPos (cNameParser tlayout) (typeParser 0 tlayout))
-           (reservedToken "," tlayout)
-       reservedToken ")" tlayout
-       reservedToken "=>" tlayout
-       return body
+contextParser layout = option [] $ try $ do
+    let tlayout = tailElemLayout layout
+    reservedToken "(" layout
+    body <- sepBy1 (liftM3 TypeContext getPos (cNameParser tlayout) (typeParser 0 tlayout))
+        (reservedToken "," tlayout)
+    reservedToken ")" tlayout
+    reservedToken "=>" tlayout
+    return body
 
 typeParser :: Int -> LayoutInfo -> Parsec TokenStream u DataType
 typeParser 0 = functionTypeParser
-typeParser 1 = choice.flip amap [composedTypeParser,typeParser 2]
-typeParser 2 = choice.flip amap
+typeParser 1 = layoutChoice [composedTypeParser,typeParser 2]
+typeParser 2 = layoutChoice
     [listTypeParser,parenthesesTypeParser,constructorTypeParser,variableTypeParser]
 
 functionTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-functionTypeParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       f <- typeParser 1 layout
-       do reservedToken "->" tlayout
-          p <- typeParser 0 layout
-          return $ functionType pos f p
-          <|> return f
+functionTypeParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    f <- typeParser 1 layout
+    option f $ reservedToken "->" tlayout >> (functionType pos f <$> typeParser 0 layout)
 
 composedTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-composedTypeParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       head <- typeParser 2 layout
-       tail <- many $ typeParser 2 tlayout
-       return $ foldl (composedType pos) head tail
+composedTypeParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    head <- typeParser 2 layout
+    tail <- many $ typeParser 2 tlayout
+    return $ foldl (composedType pos) head tail
 
 listTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-listTypeParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "[" layout
-       result <- (listType pos <$> typeParser 0 tlayout)
-           <|> return (reservedConstructorType pos "[]")
-       reservedToken "]" tlayout
-       return result
+listTypeParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "[" layout
+    result <- (listType pos <$> typeParser 0 tlayout) <|> return (reservedConstructorType pos "[]")
+    reservedToken "]" tlayout
+    return result
 
 parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-parenthesesTypeParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "(" layout
-       result <- (parenthesesType pos <$> typeParser 0 tlayout) <|>
-           (reservedToken "->" tlayout >> return (reservedConstructorType pos "->"))
-       reservedToken ")" tlayout
-       return result
+parenthesesTypeParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "(" layout
+    result <- (parenthesesType pos <$> typeParser 0 tlayout) <|>
+        (reservedToken "->" tlayout >> return (reservedConstructorType pos "->"))
+    reservedToken ")" tlayout
+    return result
 
 constructorTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 constructorTypeParser layout = liftM2 constructorType getPos (cNameParser layout)
@@ -441,125 +446,120 @@ variableTypeParser layout = liftM2 variableType getPos (unscopedvNameParser layo
 -- Top Declaration Parser
 
 topDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
-topDeclParser = choice.flip amap [dataDeclParser,typeDeclParser,(declToTopDecl <$>).declParser]
+topDeclParser = layoutChoice
+    [dataDeclParser,typeDeclParser,classDeclParser,instanceDeclParser,declDeclParser]
 
 dataDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
-dataDeclParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "data" layout
-       context <- contextParser tlayout
-       typeName <- unscopedcNameToken tlayout
-       params <- many $ unscopedvNameToken tlayout
-       reservedToken "=" tlayout
-       constructors <- sepBy1
-           (liftM2 (,) (unscopedcNameToken tlayout) (many $ typeParser 2 tlayout))
-           (reservedToken "|" tlayout)
-       return $ dataDecl pos context typeName params constructors
+dataDeclParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "data" layout
+    context <- contextParser tlayout
+    typeName <- unscopedcNameToken tlayout
+    params <- many $ unscopedvNameToken tlayout
+    reservedToken "=" tlayout
+    constructors <- sepBy1
+        (liftM2 (,) (unscopedcNameToken tlayout) (many $ typeParser 2 tlayout))
+        (reservedToken "|" tlayout)
+    return $ dataDecl pos context typeName params constructors
 
 typeDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
-typeDeclParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "type" layout
-       typeName <- unscopedcNameToken tlayout
-       params <- many $ unscopedvNameToken tlayout
-       reservedToken "=" tlayout
-       body <- typeWithContextParser tlayout
-       return $ typeDecl pos typeName params body
+typeDeclParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "type" layout
+    typeName <- unscopedcNameToken tlayout
+    params <- many $ unscopedvNameToken tlayout
+    reservedToken "=" tlayout
+    body <- typeWithContextParser tlayout
+    return $ typeDecl pos typeName params body
 
 classDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
-classDeclParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "class" layout
-       context <- contextParser tlayout
-       className <- unscopedcNameToken tlayout
-       param <- unscopedvNameToken tlayout
-       body <- option [] $ reservedToken "where" tlayout *>
-           layoutMany tlayout (choice.flip amap
-               [fixityDeclParser,typeSignatureParser,bindParser,infixBindParser])
-       return $ classDecl pos context className param body
+classDeclParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "class" layout
+    context <- contextParser tlayout
+    className <- unscopedcNameToken tlayout
+    param <- unscopedvNameToken tlayout
+    body <- option [] $ reservedToken "where" tlayout >> offsideRuleMany tlayout declParser
+    return $ classDecl pos context className param body
 
 instanceDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
-instanceDeclParser layout = let tlayout = tailElemLayout layout in
-    do pos <- getPos
-       reservedToken "instance" layout
-       context <- contextParser tlayout
-       className <- unscopedcNameToken tlayout
-       inst <- typeParser 0 tlayout
-       body <- option [] $ reservedToken "where" tlayout *>
-           layoutMany tlayout (choice.flip amap [bindParser,infixBindParser])
-       return $ instanceDecl pos context className inst body
+instanceDeclParser layout = do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    reservedToken "instance" layout
+    context <- contextParser tlayout
+    className <- unscopedcNameToken tlayout
+    inst <- typeParser 0 tlayout
+    body <- option [] $ reservedToken "where" tlayout >> offsideRuleMany tlayout declParser
+    return $ instanceDecl pos context className inst body
+
+declDeclParser :: LayoutInfo -> Parsec TokenStream u TopDecl
+declDeclParser layout = declToTopDecl <$> declParser layout
 
 -- Declaration Parser
 
 declParser :: LayoutInfo -> Parsec TokenStream u Decl
-declParser = choice.flip amap
-    [fixityDeclParser,typeSignatureParser,bindParser,infixBindParser,patternBindParser]
+declParser = layoutChoice [fixityDeclParser,typeSignatureParser,bindParser,patternBindParser]
 
 fixityDeclParser :: LayoutInfo -> Parsec TokenStream u Decl
-fixityDeclParser layout =
-    do pos <- getPos
-       fixity <- fixityParser
-       num <- option Nothing (Just <$> operatorLevelParser)
-       ops <- sepBy1 (opParser tlayout) (reservedToken "," tlayout)
-       return $ fixityDecl pos fixity num ops
-    where
-        tlayout = tailElemLayout layout
-        fixityParser = (reservedToken "infixl" layout >> return Infixl) <|>
-            (reservedToken "infix" layout >> return Infix) <|>
-            (reservedToken "infixr" layout >> return Infixr)
-        operatorLevelParser = getToken operatorLevelTest tlayout
-        operatorLevelTest (LiteralToken (LiteralInt num)) | (0 <= num && num <= 9) = Just num
-        operatorLevelTest _ = Nothing
+fixityDeclParser layout = do
+    pos <- getPos
+    fixity <- fixityParser
+    num <- option Nothing (Just <$> operatorLevelParser)
+    ops <- sepBy1 (opParser tlayout) (reservedToken "," tlayout)
+    return $ fixityDecl pos fixity num ops
+    where tlayout = tailElemLayout layout
+          fixityParser = (reservedToken "infixl" layout >> return Infixl) <|>
+              (reservedToken "infix" layout >> return Infix) <|>
+              (reservedToken "infixr" layout >> return Infixr)
+          operatorLevelParser = getToken operatorLevelTest tlayout <?> "valid precedence"
+          operatorLevelTest (LiteralToken (LiteralInt num)) | (0 <= num && num <= 9) = Just num
+          operatorLevelTest _ = Nothing
 
 typeSignatureParser :: LayoutInfo -> Parsec TokenStream u Decl
-typeSignatureParser layout = let tlayout = tailElemLayout layout in try $
-    do pos <- getPos
-       name <- unscopedvNameParser layout
-       reservedToken "::" tlayout
-       typeName <- typeWithContextParser tlayout
-       return $ typeSignatureDecl pos name typeName
+typeSignatureParser layout = try $ do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    name <- unscopedvNameParser layout
+    reservedToken "::" tlayout
+    typeName <- typeWithContextParser tlayout
+    return $ typeSignatureDecl pos name typeName
 
 bindParser :: LayoutInfo -> Parsec TokenStream u Decl
-bindParser layout = let tlayout = tailElemLayout layout in try $
-    do pos <- getPos
-       name <- unscopedvNameParser layout
-       params <- many1 $ patternParser 3 tlayout
-       body <- exprOrGuardParser "=" tlayout
-       whereClause <- option [] $ reservedToken "where" tlayout *> layoutMany tlayout declParser
-       return $ bindDecl pos name params body whereClause
-
-infixBindParser :: LayoutInfo -> Parsec TokenStream u Decl
-infixBindParser layout = let tlayout = tailElemLayout layout in try $
-    do pos <- getPos
-       leftPattern <- patternParser 1 layout
-       operator <- unscopedvOpParser tlayout
-       rightPattern <- patternParser 1 layout
-       body <- exprOrGuardParser "=" tlayout
-       whereClause <- option [] $ reservedToken "where" tlayout *> layoutMany tlayout declParser
-       return $ infixBindDecl pos operator leftPattern rightPattern body whereClause
+bindParser layout = try $ do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    name <- unscopedvNameParser layout
+    params <- many $ patternParser 3 tlayout
+    body <- exprOrGuardParser "=" tlayout
+    whereClause <- option [] $ reservedToken "where" tlayout >> offsideRuleMany tlayout declParser
+    return $ bindDecl pos name params body whereClause
 
 patternBindParser :: LayoutInfo -> Parsec TokenStream u Decl
-patternBindParser layout = let tlayout = tailElemLayout layout in try $
-    do pos <- getPos
-       pattern <- patternParser 3 tlayout
-       body <- exprOrGuardParser "=" tlayout
-       whereClause <- option [] $ reservedToken "where" tlayout *> layoutMany tlayout declParser
-       return $ patternBindDecl pos pattern body whereClause
+patternBindParser layout = try $ do
+    let tlayout = tailElemLayout layout
+    pos <- getPos
+    pattern <- bindPatternParser layout
+    body <- exprOrGuardParser "=" tlayout
+    whereClause <- option [] $ reservedToken "where" tlayout >> offsideRuleMany tlayout declParser
+    return $ patternBindDecl pos pattern body whereClause
+    where bindPatternParser = patternWithTypeParser' $ opPatternParser' opToken
 
 -- Module Parser
 
-globalParser :: Parsec TokenStream u Expr
-globalParser = exprParser 0 arbitraryLayout <* eof
-
 moduleParser :: Parsec TokenStream u Module
-moduleParser =
-    do modname <- option [] $ reservedToken "module" layout
-           *> moduleNameParser tlayout <* reservedToken "where" tlayout
-       importDecls <- many $ reservedToken "import" layout *> moduleNameParser tlayout
-       topDecls <- many $ topDeclParser layout
-       eof
-       return $ Module modname importDecls topDecls
-    where
-        layout = LayoutInfo True 0
-        tlayout = tailElemLayout layout
+moduleParser = do
+    modname <- option [] $ reservedToken "module" layout
+        >> moduleNameParser tlayout <* reservedToken "where" tlayout
+    importDecls <- offsideRuleMany layout importDeclParser
+    topDecls <- offsideRuleMany layout topDeclParser
+    eof
+    return $ Module modname importDecls topDecls
+    where layout = Right 1
+          tlayout = tailElemLayout layout
+          importDeclParser layout =
+              reservedToken "import" layout >> moduleNameParser (tailElemLayout layout)
 
