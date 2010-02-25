@@ -5,17 +5,22 @@ import Text.Parsec
 
 import Data.List
 
--- Data Types
+-- Position, Layout
 
 data Position = Position Int Int deriving Show
 
 type LayoutInfo = Either Int Int
 
+-- Name
 
 type ModuleName = [String]
 
 data ScopedName = ScopedName ModuleName String deriving Eq
 
+instance Show ScopedName where
+    show (ScopedName scope name) = concatMap (++".") scope++name
+
+-- Literal
 
 data Literal
     = LiteralInt Int {- integer literal -}
@@ -24,8 +29,18 @@ data Literal
     | LiteralString String {- character string literal -}
         deriving Eq
 
+instance Show Literal where
+    show (LiteralInt i) = show i
+    show (LiteralFloat f) = show f
+    show (LiteralChar c) = show c
+    show (LiteralString s) = show s
+
+-- Token
 
 data Token' = Token' SourcePos Token
+
+instance Show Token' where
+    show (Token' pos t) = show pos++" "++show t
 
 type TokenStream = [Token']
 
@@ -36,12 +51,24 @@ data Token
     | ReservedToken String {- reserved word token, reserved symbol token -}
         deriving (Eq,Show)
 
+-- Data Type
 
 data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
 
+instance Show DataTypeWithContext where
+    show (DataTypeWithContext _ [] dataType) = show dataType
+    show (DataTypeWithContext _ typeContext dataType) =
+        "("++(intercalate "," $ map show typeContext)++") => "++show dataType
+
 data TypeContext = TypeContext Position ScopedName DataType
 
+instance Show TypeContext where
+    show (TypeContext _ typeClass typeName) = show typeClass++" "++show typeName
+
 data DataType = DataType Position PrimDataType
+
+instance Show DataType where
+    show (DataType _ t) = show t
 
 data PrimDataType
     = PrimVariableType String {- variable type -}
@@ -52,8 +79,21 @@ data PrimDataType
     | PrimFunctionType DataType DataType {- function type -}
     | PrimParenthesesType DataType {- parentheses type -}
 
+instance Show PrimDataType where
+    show (PrimVariableType str) = str
+    show (PrimConstructorType name) = show name
+    show (PrimReservedConstructorType str) = str
+    show (PrimComposedType cons param) = "("++show cons++" "++show param++")"
+    show (PrimListType param) = "["++show param++"]"
+    show (PrimFunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
+    show (PrimParenthesesType t) = "("++show t++")"
+
+-- Pattern Match
 
 data PatternMatch = PatternMatch Position PrimPatternMatch
+
+instance Show PatternMatch where
+    show (PatternMatch pos pattern) = show pattern
 
 data PrimPatternMatch
     = DCPrimPattern ScopedName [PatternMatch] {- data constructor pattern -}
@@ -65,8 +105,22 @@ data PrimPatternMatch
     | ParenthesesPrimPattern PatternMatch {- Parentheses Pattern -}
     | PrimPatternWithType PatternMatch DataTypeWithContext {- pattern with data type information -}
 
+instance Show PrimPatternMatch where
+    show (DCPrimPattern name list) = "("++show name++concatMap ((' ':).show) list++")"
+    show (LiteralPrimPattern literal) = show literal
+    show (DCOpPrimPattern name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
+    show (ListPrimPattern list) = show list
+    show (BindPrimPattern str Nothing) = str
+    show (BindPrimPattern str (Just pattern)) = "("++str++"@"++show pattern++")"
+    show (ParenthesesPrimPattern pattern) = "("++show pattern++")"
+    show (PrimPatternWithType pattern typeName) = "("++show pattern++show typeName++")"
+
+-- Expression
 
 data Expr = Expr Position PrimExpr
+
+instance Show Expr where
+    show (Expr pos primExpr) = show primExpr
 
 data PrimExpr
     = LiteralPrimExpr Literal {- literal expression -}
@@ -82,104 +136,6 @@ data PrimExpr
     | CasePrimExpr Expr [CasePattern] {- case Expression -}
     | PrimExprWithType Expr DataTypeWithContext {- expression with data type information -}
 
-data Guard = Guard Expr Expr
-
-type ExprOrGuard = Either Expr [Guard]
-
-data Lambda = Lambda Position [PatternMatch] Expr
-
-data PrimLet = PrimLet PatternMatch ExprOrGuard
-
-data CasePattern = CasePattern PatternMatch ExprOrGuard
-
-
-data TopDecl = TopDecl Position PrimTopDecl
-
-data PrimTopDecl
-    = PrimDataDecl [TypeContext] String [String] [(String,[DataType])]
-    | PrimTypeDecl String [String] DataTypeWithContext
-    | PrimClassDecl [TypeContext] String String [Decl]
-    | PrimInstanceDecl [TypeContext] String DataType [Decl]
-    | PrimDeclDecl PrimDecl
-
-data Decl = Decl Position PrimDecl
-
-data PrimDecl
-    = PrimFixityDecl Fixity (Maybe Int) [ScopedName]
-    | PrimTypeSignature String DataTypeWithContext
-    | PrimBindDecl String [PatternMatch] ExprOrGuard [Decl]
-    | PrimInfixBindDecl PatternMatch ExprOrGuard [Decl]
-    | PrimPatternBindDecl PatternMatch ExprOrGuard [Decl]
-
-data Fixity = Infixl | Infix | Infixr deriving Show
-
-
-data Module
-    = Module ModuleName [ModuleName] [TopDecl]
-
--- Output Format
-
-instance Show ScopedName where
-    show (ScopedName scope name) = concatMap (++".") scope++name
-
-instance Show Literal where
-    show (LiteralInt i) = show i
-    show (LiteralFloat f) = show f
-    show (LiteralChar c) = show c
-    show (LiteralString s) = show s
-
-instance Show Token' where
-    show (Token' pos t) = show pos++" "++show t
-
-instance Show DataTypeWithContext where
-    show (DataTypeWithContext _ [] dataType) = show dataType
-    show (DataTypeWithContext _ typeContext dataType) =
-        "("++(intercalate "," $ map show typeContext)++") => "++show dataType
-
-instance Show TypeContext where
-    show (TypeContext _ typeClass typeName) = show typeClass++" "++show typeName
-
-instance Show DataType where
-    show (DataType _ t) = show t
-
-instance Show PrimDataType where
-    show (PrimVariableType str) = str
-    show (PrimConstructorType name) = show name
-    show (PrimReservedConstructorType str) = str
-    show (PrimComposedType cons param) = "("++show cons++" "++show param++")"
-    show (PrimListType param) = "["++show param++"]"
-    show (PrimFunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
-    show (PrimParenthesesType t) = "("++show t++")"
-
-instance Show PatternMatch where
-    show (PatternMatch pos pattern) = show pattern
-
-instance Show PrimPatternMatch where
-    show (DCPrimPattern name list) = "("++show name++concatMap ((' ':).show) list++")"
-    show (LiteralPrimPattern literal) = show literal
-    show (DCOpPrimPattern name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
-    show (ListPrimPattern list) = show list
-    show (BindPrimPattern str Nothing) = str
-    show (BindPrimPattern str (Just pattern)) = "("++str++"@"++show pattern++")"
-    show (ParenthesesPrimPattern pattern) = "("++show pattern++")"
-    show (PrimPatternWithType pattern typeName) = "("++show pattern++show typeName++")"
-
-instance Show Lambda where
-    show (Lambda pos params expr) = (intercalate " " $ map show params)++" -> "++show expr
-
-instance Show PrimLet where
-    show (PrimLet pattern expr) = show pattern++" = "++show expr
-
-instance Show Guard where
-    show (Guard cond expr) = "| "++show cond++" "++show expr
-
-instance Show CasePattern where
-    show (CasePattern pattern (Left expr)) = show pattern++" "++show expr
-    show (CasePattern pattern (Right list)) = show pattern++" "++show list
-
-instance Show Expr where
-    show (Expr pos primExpr) = show primExpr
-
 instance Show PrimExpr where
     show (LiteralPrimExpr literal) = show literal
     show (NamePrimExpr name) = show name
@@ -189,13 +145,46 @@ instance Show PrimExpr where
     show (ParenthesesPrimExpr expr) = "("++show expr++")"
     show (ListPrimExpr list) = show list
     show (LambdaPrimExpr list) = "(\\"++(intercalate " | " $ map show list)++")"
-    show (LetPrimExpr list expr) = "{let "++show list++" "++show expr++"}"
-    show (IfPrimExpr c t f) = "{if "++show c++" "++show t++" "++show f++"}"
-    show (CasePrimExpr expr list) = "{case "++show expr++" "++show list++"}"
+    show (LetPrimExpr list expr) = "(let "++show list++" "++show expr++")"
+    show (IfPrimExpr c t f) = "(if "++show c++" "++show t++" "++show f++")"
+    show (CasePrimExpr expr list) = "(case "++show expr++" "++show list++")"
     show (PrimExprWithType expr dataType) = "("++show expr++"::"++show dataType++")"
+
+data Guard = Guard Expr Expr
+
+instance Show Guard where
+    show (Guard cond expr) = "| "++show cond++" "++show expr
+
+type ExprOrGuard = Either Expr [Guard]
+
+data Lambda = Lambda Position [PatternMatch] Expr
+
+instance Show Lambda where
+    show (Lambda pos params expr) = (intercalate " " $ map show params)++" -> "++show expr
+
+data PrimLet = PrimLet BindLhs ExprOrGuard
+
+instance Show PrimLet where
+    show (PrimLet lhs expr) = show lhs++" = "++either show show expr
+
+data CasePattern = CasePattern PatternMatch ExprOrGuard
+
+instance Show CasePattern where
+    show (CasePattern pattern expr) = show pattern++" "++either show show expr
+
+-- Declaration
+
+data TopDecl = TopDecl Position PrimTopDecl
 
 instance Show TopDecl where
     show (TopDecl _ decl) = show decl
+
+data PrimTopDecl
+    = PrimDataDecl [TypeContext] String [String] [(String,[DataType])]
+    | PrimTypeDecl String [String] DataTypeWithContext
+    | PrimClassDecl [TypeContext] String String [Decl]
+    | PrimInstanceDecl [TypeContext] String DataType [Decl]
+    | PrimDeclDecl PrimDecl
 
 instance Show PrimTopDecl where
     show (PrimDataDecl [] str param body) = "data "++str++concatMap (' ':) param++" = "++
@@ -205,32 +194,49 @@ instance Show PrimTopDecl where
         intercalate " | " (map (\(s,l) -> s++concatMap ((' ':).show) l) body)
     show (PrimTypeDecl str param typeName) =
         "type "++str++intercalate " " param++" = "++show typeName
-    show (PrimClassDecl [] className typeName body) = "class "++className++" "++typeName++
-        " where"++concatMap ("\n    "++) (body>>=(lines.show))
-    show (PrimClassDecl context className typeName body) = "class "++show context++" => "++
-        className++" "++typeName++" where"++concatMap ("\n    "++) (body>>=(lines.show))
-    show (PrimInstanceDecl [] className typeName body) = "instance "++className++
-        " "++show typeName++" where"++concatMap ("\n    "++) (body>>=(lines.show))
-    show (PrimInstanceDecl context className typeName body) = "instance "++show context++" => "++
-        className++" "++show typeName++" where"++concatMap ("\n    "++) (body>>=(lines.show))
+    show (PrimClassDecl [] className typeName body) =
+        "class "++className++" "++typeName++showWhereClause body
+    show (PrimClassDecl context className typeName body) =
+        "class "++show context++" => "++className++" "++typeName++showWhereClause body
+    show (PrimInstanceDecl [] className typeName body) =
+        "instance "++className++" "++show typeName++showWhereClause body
+    show (PrimInstanceDecl context className typeName body) =
+        "instance "++show context++" => "++className++" "++show typeName++showWhereClause body
     show (PrimDeclDecl decl) = show decl
+
+data Decl = Decl Position PrimDecl
 
 instance Show Decl where
     show (Decl pos decl) = show decl
+
+data PrimDecl
+    = PrimFixityDecl Fixity (Maybe Int) [ScopedName]
+    | PrimTypeSignature String DataTypeWithContext
+    | PrimBindDecl BindLhs ExprOrGuard [Decl]
 
 instance Show PrimDecl where
     show (PrimFixityDecl fixity Nothing list) = show fixity++" "++show list
     show (PrimFixityDecl fixity (Just num) list) = show fixity++" "++show num++" "++show list
     show (PrimTypeSignature str typeName) = str++" :: "++show typeName
-    show (PrimBindDecl str params body []) = str++" "++show params++" = "++show body
-    show (PrimBindDecl str params body whereClause) = str++" "++show params++" = "++show body++
-        concatMap ("    "++) (whereClause>>=(lines.show))
-    show (PrimInfixBindDecl lhs body []) = show lhs++" = "++show body
-    show (PrimInfixBindDecl lhs body whereClause) = show lhs++" = "++
-        show body++concatMap ("    "++) (whereClause>>=(lines.show))
-    show (PrimPatternBindDecl pat body []) = show pat++" = "++show body
-    show (PrimPatternBindDecl pat body whereClause) = show pat++" = "++show body++
-        concatMap ("    "++) (whereClause>>=(lines.show))
+    show (PrimBindDecl lhs body whereClause) =
+        show lhs++" = "++either show show body++showWhereClause whereClause
+
+data Fixity = Infixl | Infix | Infixr deriving Show
+
+data BindLhs
+    = FunctionBindLhs String [PatternMatch]
+    | InfixBindLhs String PatternMatch PatternMatch
+    | PatternBindLhs PatternMatch
+
+instance Show BindLhs where
+    show (FunctionBindLhs name params) = name++concatMap ((' ':).show) params
+    show (InfixBindLhs name pat1 pat2) = show pat1++" "++name++" "++show pat2
+    show (PatternBindLhs pat) = show pat
+
+-- Module
+
+data Module
+    = Module ModuleName [ModuleName] [TopDecl]
 
 instance Show Module where
     show (Module [] imports decls) = concatMap ((++"\n").("import "++).intercalate ".") imports++
@@ -238,6 +244,15 @@ instance Show Module where
     show (Module modname imports decls) = "module "++intercalate "." modname++" where\n"++
         concatMap ((++"\n").("import "++).intercalate ".") imports++
         "\n"++concatMap ((++"\n").show) decls
+
+-- Output Functions
+
+showWhereClause :: (Show a) => [a] -> String
+showWhereClause [] = ""
+showWhereClause list = "where\n"++showLayoutList list
+
+showLayoutList :: (Show a) => [a] -> String
+showLayoutList = unlines.map ("    "++).lines.concatMap show
 
 -- Composed Data Constructors
 
@@ -352,12 +367,6 @@ fixityDecl pos fixity level = Decl pos.PrimFixityDecl fixity level
 typeSignatureDecl :: Position -> String -> DataTypeWithContext -> Decl
 typeSignatureDecl pos name = Decl pos.PrimTypeSignature name
 
-bindDecl :: Position -> String -> [PatternMatch] -> ExprOrGuard -> [Decl] -> Decl
-bindDecl pos name params body = Decl pos.PrimBindDecl name params body
-
-infixBindDecl :: Position -> PatternMatch -> ExprOrGuard -> [Decl] -> Decl
-infixBindDecl pos lhs body = Decl pos.PrimInfixBindDecl lhs body
-
-patternBindDecl :: Position -> PatternMatch -> ExprOrGuard -> [Decl] -> Decl
-patternBindDecl pos pattern body = Decl pos.PrimPatternBindDecl pattern body
+bindDecl :: Position -> BindLhs -> ExprOrGuard -> [Decl] -> Decl
+bindDecl pos lhs body = Decl pos.PrimBindDecl lhs body
 

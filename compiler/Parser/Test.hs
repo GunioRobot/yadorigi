@@ -1,5 +1,5 @@
 
-module Main where
+module Yadorigi.Parser.Test where
 
 import Yadorigi.Parser.DataTypes
 import Yadorigi.Parser.Parser
