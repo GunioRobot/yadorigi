@@ -1,6 +1,7 @@
 
 module Yadorigi.Parser.Tokenizer (tokenizer) where
 
+import Yadorigi.Syntax
 import Yadorigi.Parser.DataTypes
 
 import Text.Parsec

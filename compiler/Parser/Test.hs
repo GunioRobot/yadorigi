@@ -1,7 +1,7 @@
 
 module Yadorigi.Parser.Test where
 
-import Yadorigi.Parser.DataTypes
+import Yadorigi.Syntax
 import Yadorigi.Parser.Parser
 import Yadorigi.Parser.Tokenizer
 

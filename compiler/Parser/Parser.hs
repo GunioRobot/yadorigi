@@ -2,6 +2,7 @@
 module Yadorigi.Parser.Parser where
 
 import Yadorigi.Common
+import Yadorigi.Syntax
 import Yadorigi.Parser.DataTypes
 
 import Text.Parsec
@@ -9,6 +10,10 @@ import Control.Applicative ((<$>),(<*),(*>),(<*>),(<**>))
 import Control.Monad
 import Data.Char
 import Data.Maybe
+
+-- Data Types
+
+type LayoutInfo = Either Int Int
 
 -- Position
 

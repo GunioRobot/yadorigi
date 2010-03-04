@@ -4,7 +4,7 @@ module Yadorigi.SemanticAnalysis.ScopeResolution where
 import Data.List
 import Control.Arrow
 
-import Yadorigi.Parser.DataTypes
+import Yadorigi.Syntax
 
 -- Bind Scope Name To Pattern Bind
 
