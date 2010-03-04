@@ -4,10 +4,8 @@ module Yadorigi.Parser.Test where
 import Yadorigi.Parser.DataTypes
 import Yadorigi.Parser.Parser
 import Yadorigi.Parser.Tokenizer
-import Yadorigi.Parser.Recons
 
 import Text.Parsec
-
 import Control.Monad
 
 -- Parser Tester

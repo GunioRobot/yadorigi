@@ -5,10 +5,8 @@ import Yadorigi.Common
 import Yadorigi.Parser.DataTypes
 
 import Text.Parsec
-
 import Control.Applicative ((<$>),(<*),(*>),(<*>),(<**>))
 import Control.Monad
-
 import Data.Char
 import Data.Maybe
 
@@ -246,7 +244,7 @@ lambdaExprParser layout = do
               return $ Lambda pos params expr
 
 nameExprParser :: LayoutInfo -> Parsec TokenStream u Expr
-nameExprParser layout = liftM2 nameExpr (getPosWithTest layout) (nameParser layout)
+nameExprParser layout = liftM3 nameExpr (getPosWithTest layout) (nameParser layout) (return 0)
 
 literalParser :: LayoutInfo -> Parsec TokenStream u Expr
 literalParser layout = liftM2 literalExpr (getPosWithTest layout) (literalToken layout)
@@ -345,8 +343,8 @@ asPatternParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
 asPatternParser layout = let tlayout = tailElemLayout layout in
     do pos <- getPos
        var <- unscopedvNameParser layout
-       option (bindPattern pos var)
-           (reservedToken "@" tlayout >> (asPattern pos var <$> patternParser 2 tlayout))
+       option (bindPattern pos var 0)
+           (reservedToken "@" tlayout >> (asPattern pos var 0 <$> patternParser 2 tlayout))
 
 singleDCPatternParser :: LayoutInfo -> Parsec TokenStream u PatternMatch
 singleDCPatternParser layout = liftM3 dcPattern getPos (cNameParser layout) (return [])
@@ -533,7 +531,7 @@ infixLhsParser layout = let tlayout = tailElemLayout layout in
         (patternParser 1 layout) (unscopedvOpParser tlayout) (patternParser 1 tlayout)
 
 patternLhsParser :: LayoutInfo -> Parsec TokenStream u Lhs
-patternLhsParser layout = PatternLhs <$> patternParser 0 layout
+patternLhsParser layout = PatternLhs "" <$> patternParser 0 layout
 
 rhsParser :: String -> LayoutInfo -> Parsec TokenStream u Rhs
 rhsParser str layout = let tlayout = tailElemLayout layout in

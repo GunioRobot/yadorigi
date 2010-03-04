@@ -4,12 +4,10 @@ module Yadorigi.Parser.Tokenizer (tokenizer) where
 import Yadorigi.Parser.DataTypes
 
 import Text.Parsec
-
 import Data.Char
 import Data.Maybe
-
+import Data.Functor
 import Control.Monad
-import Control.Applicative ((<$>))
 
 -- Constant Values
 
@@ -38,13 +36,13 @@ tokenizer = between spacesAndComments eof (many getToken)
 -- Spaces and Comments
 
 lineComment :: Parsec String u ()
-lineComment = try $ const () <$> (string "--" >> manyTill anyChar ((const () <$> char '\n') <|> eof))
+lineComment = try $ () <$ (string "--" >> manyTill anyChar ((() <$ char '\n') <|> eof))
 
 blockComment :: Parsec String u ()
-blockComment = try $ const () <$> (string "{-" >> manyTill anyChar (try (string "-}")))
+blockComment = try $ () <$ (string "{-" >> manyTill anyChar (try (string "-}")))
 
 spacesAndComments :: Parsec String u ()
-spacesAndComments = (skipMany $ (const () <$> space) <|> lineComment <|> blockComment) <?> "comment"
+spacesAndComments = (skipMany $ (() <$ space) <|> lineComment <|> blockComment) <?> "comment"
 
 -- Literal
 
