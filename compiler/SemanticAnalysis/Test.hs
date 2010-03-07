@@ -4,7 +4,7 @@ module Yadorigi.SemanticAnalysis.Test where
 import Yadorigi.Syntax
 import Yadorigi.Parser.Parser
 import Yadorigi.Parser.Tokenizer
-import Yadorigi.SemanticAnalysis.ScopeResolution
+import Yadorigi.SemanticAnalysis.BindScope
 
 import Text.Parsec
 import Control.Monad
@@ -20,7 +20,7 @@ main = do
                 (Right result) -> do
                     print result
                     putStrLn "bindScopeName"
-                    print $ bindScopeNameToModule result
+                    print $ bindScope_ declScopeList result
                 (Left error) -> print error
         (Left error) -> print error
 
