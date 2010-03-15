@@ -6,19 +6,23 @@ import Data.List
 -- Module
 
 data Module
-    = Module ModuleName [ExportEntity] [Import] [Decl]
+    = Module ModuleName (Maybe [ExportEntity]) [Import] [Decl]
 
 instance Show Module where
     show (Module [] _ imports decls) =
         unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
     show (Module modname exports imports decls) =
-        "module "++intercalate "." modname++" ("++intercalate "," (map show exports)++") where\n"++
+        "module "++intercalate "." modname++
+        " ("++maybe ".." (intercalate ",".map show) exports++") where\n"++
         unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
 
-data Import = Import Bool ModuleName Bool [ImportEntity] (Maybe ModuleName)
+data Import = Import Bool ModuleName (Maybe (Bool,[ImportEntity])) (Maybe ModuleName)
 
 instance Show Import where
-    show (Import qualified modname hidden imports alias) =
+    show (Import qualified modname Nothing alias) =
+        "import "++(if qualified then "qualified" else "")++intercalate "," modname++
+        (maybe "" ((" as "++).intercalate ".") alias)
+    show (Import qualified modname (Just (hidden,imports)) alias) =
         "import "++(if qualified then "qualified" else "")++intercalate "," modname++
         (if hidden then "hidden" else "")++" ("++intercalate "," (map show imports)++")"++
         (maybe "" ((" as "++).intercalate ".") alias)
