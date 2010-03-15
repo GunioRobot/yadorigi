@@ -94,6 +94,11 @@ unscopedvNameToken = getToken f
     where f (NameToken (ScopedName [] str)) | isLower (head str) || '_' == (head str) = Just str
           f _ = Nothing
 
+fixedNameToken :: String -> LayoutInfo -> Parsec TokenStream u ScopedName
+fixedNameToken str = getToken f
+    where f (NameToken op@(ScopedName [] str')) | str == str' = Just op
+          f _ = Nothing
+
 opToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 opToken = getToken f
     where f (OpToken name) = Just name
@@ -126,7 +131,7 @@ unscopedvOpToken = getToken f
 
 fixedOpToken :: String -> LayoutInfo -> Parsec TokenStream u ScopedName
 fixedOpToken str = getToken f
-    where f (OpToken op@(ScopedName _ str')) | str == str' = Just op
+    where f (OpToken op@(ScopedName [] str')) | str == str' = Just op
           f _ = Nothing
 
 reservedToken :: String -> LayoutInfo -> Parsec TokenStream u Token
@@ -186,12 +191,10 @@ moduleNameParser layout =
 -- Parser Combinators
 
 offsideRuleMany :: (LayoutInfo -> Parsec [s] u a) -> LayoutInfo -> Parsec [s] u [a]
-offsideRuleMany parser layout =
-    (getPosWithTest layout >>= \(_,col) -> many $ parser $ Right col) <|> return []
+offsideRuleMany parser layout = (getPosWithTest layout >>= many.parser.Right .snd) <|> return []
 
 offsideRuleMany1 :: (LayoutInfo -> Parsec [s] u a) -> LayoutInfo -> Parsec [s] u [a]
-offsideRuleMany1 parser layout =
-    getPosWithTest layout >>= (\(_,col) -> many1 $ parser $ Right col)
+offsideRuleMany1 parser layout = getPosWithTest layout >>= many1.parser.Right .snd
 
 layoutParentheses :: LayoutInfo -> (LayoutInfo -> Parsec TokenStream u a) -> Parsec TokenStream u a
 layoutParentheses layout parser = let tlayout = tailElemLayout layout in
@@ -212,16 +215,54 @@ layoutChoice list layout = choice $ amap layout list
 
 moduleParser :: Parsec TokenStream u Module
 moduleParser = do
-    modname <- option [] $ reservedToken "module" layout
-        >> moduleNameParser tlayout <* reservedToken "where" tlayout
-    importDecls <- offsideRuleMany importDeclParser layout
+    let layout = Right 1
+    let tlayout = tailElemLayout layout
+    (modname,exportList) <- option ([],[]) $ do
+        reservedToken "module" layout
+        modname <- option [] $ moduleNameParser tlayout
+        exportList <- option [] $ layoutParentheses tlayout $
+            \l -> sepBy1 (exportEntityParser l) (reservedToken "," l)
+        reservedToken "where" tlayout
+        return (modname,exportList)
+    imports <- offsideRuleMany importParser layout
     topDecls <- offsideRuleMany topDeclParser layout
     eof
-    return $ Module modname importDecls topDecls
-    where layout = Right 1
-          tlayout = tailElemLayout layout
-          importDeclParser layout =
-              reservedToken "import" layout >> moduleNameParser (tailElemLayout layout)
+    return $ Module modname exportList imports topDecls
+    where nameExportEntityParser :: LayoutInfo -> Parsec TokenStream u ExportEntity
+          nameExportEntityParser layout = do
+              let tlayout = tailElemLayout layout
+              entity <- nameParser layout
+              children <- option [] $
+                  layoutParentheses tlayout $ \l -> sepBy1 (nameParser l) (reservedToken "," l)
+              return $ NameExportEntity entity $
+                  if children == [ScopedName [] ".."] then Nothing else Just children
+          moduleExportEntityParser :: LayoutInfo -> Parsec TokenStream u ExportEntity
+          moduleExportEntityParser layout = do
+              let tlayout = tailElemLayout layout
+              reservedToken "module" layout
+              ModuleExportEntity <$> moduleNameParser tlayout
+          exportEntityParser :: LayoutInfo -> Parsec TokenStream u ExportEntity
+          exportEntityParser = layoutChoice [nameExportEntityParser,moduleExportEntityParser]
+
+importParser :: LayoutInfo -> Parsec TokenStream u Import
+importParser layout = do
+    let tlayout = tailElemLayout layout
+    reservedToken "import" layout
+    qualified <- option False $ fixedNameToken "qualified" tlayout >> return True
+    modname <- moduleNameParser tlayout
+    hidden <- option False $ fixedNameToken "hidden" tlayout >> return True
+    importList <- option [] $ layoutParentheses tlayout $
+        \l -> sepBy1 (importEntityParser l) (reservedToken "," l)
+    alias <- option Nothing $ Just <$> (fixedNameToken "as" tlayout >> moduleNameParser tlayout)
+    return $ Import qualified modname hidden importList alias
+    where importEntityParser :: LayoutInfo -> Parsec TokenStream u ImportEntity
+          importEntityParser layout = do
+              let tlayout = tailElemLayout layout
+              entity <- nameParser layout
+              children <- option [] $
+                  layoutParentheses tlayout $ \l -> sepBy1 (nameParser l) (reservedToken "," l)
+              return $ ImportEntity entity $
+                  if children == [ScopedName [] ".."] then Nothing else Just children
 
 -- Declaration Parser
 

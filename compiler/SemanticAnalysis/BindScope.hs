@@ -31,8 +31,8 @@ instance BindScope t => BindScope [t] where
 
 
 instance BindScope Module where
-    bindScope (Module modname imports decls) =
-        return $ Module modname imports $ bindScope_ declScopeList decls
+    bindScope (Module modname exports imports decls) =
+        return $ Module modname exports imports $ bindScope_ declScopeList decls
 
 
 instance BindScope Decl where

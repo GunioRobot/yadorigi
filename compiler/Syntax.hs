@@ -6,14 +6,41 @@ import Data.List
 -- Module
 
 data Module
-    = Module ModuleName [ModuleName] [Decl]
+    = Module ModuleName [ExportEntity] [Import] [Decl]
 
 instance Show Module where
-    show (Module [] imports decls) = concatMap ((++"\n").("import "++).intercalate ".") imports++
-        "\n"++concatMap ((++"\n").show) decls
-    show (Module modname imports decls) = "module "++intercalate "." modname++" where\n"++
-        concatMap ((++"\n").("import "++).intercalate ".") imports++
-        "\n"++concatMap ((++"\n").show) decls
+    show (Module [] _ imports decls) =
+        unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
+    show (Module modname exports imports decls) =
+        "module "++intercalate "." modname++" ("++intercalate "," (map show exports)++") where\n"++
+        unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
+
+data Import = Import Bool ModuleName Bool [ImportEntity] (Maybe ModuleName)
+
+instance Show Import where
+    show (Import qualified modname hidden imports alias) =
+        "import "++(if qualified then "qualified" else "")++intercalate "," modname++
+        (if hidden then "hidden" else "")++" ("++intercalate "," (map show imports)++")"++
+        (maybe "" ((" as "++).intercalate ".") alias)
+
+data ExportEntity
+    = ModuleExportEntity ModuleName
+    | NameExportEntity ScopedName (Maybe [ScopedName])
+
+instance Show ExportEntity where
+    show (ModuleExportEntity modname) = "module "++show modname
+    show (NameExportEntity name Nothing) = show name++" (..)"
+    show (NameExportEntity name (Just [])) = show name
+    show (NameExportEntity name (Just children)) =
+        show name++" ("++intercalate " , " (map show children)++")"
+
+data ImportEntity = ImportEntity ScopedName (Maybe [ScopedName])
+
+instance Show ImportEntity where
+    show (ImportEntity name Nothing) = show name++" (..)"
+    show (ImportEntity name (Just [])) = show name
+    show (ImportEntity name (Just children)) =
+        show name++" ("++intercalate " , " (map show children)++")"
 
 -- Declaration
 
