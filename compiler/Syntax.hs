@@ -16,7 +16,7 @@ instance Show Module where
         " ("++maybe ".." (intercalate ",".map show) exports++") where\n"++
         unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
 
-data Import = Import Bool ModuleName (Maybe (Bool,[ImportEntity])) (Maybe ModuleName)
+data Import = Import Bool ModuleName (Maybe (Bool,[ImportEntity])) (Maybe ModuleName) deriving Eq
 
 instance Show Import where
     show (Import qualified modname Nothing alias) =
@@ -29,7 +29,7 @@ instance Show Import where
 
 data ExportEntity
     = ModuleExportEntity ModuleName
-    | NameExportEntity ScopedName (Maybe [ScopedName])
+    | NameExportEntity ScopedName (Maybe [ScopedName]) deriving Eq
 
 instance Show ExportEntity where
     show (ModuleExportEntity modname) = "module "++show modname
@@ -38,7 +38,7 @@ instance Show ExportEntity where
     show (NameExportEntity name (Just children)) =
         show name++" ("++intercalate " , " (map show children)++")"
 
-data ImportEntity = ImportEntity ScopedName (Maybe [ScopedName])
+data ImportEntity = ImportEntity ScopedName (Maybe [ScopedName]) deriving Eq
 
 instance Show ImportEntity where
     show (ImportEntity name Nothing) = show name++" (..)"
@@ -150,9 +150,9 @@ data Lambda = Lambda Position String [PatternMatch] Expr
 
 instance Show Lambda where
     show (Lambda pos "" params expr) =
-        "\\"++(intercalate " " $ map show params)++" -> "++show expr
+        (intercalate " " $ map show params)++" -> "++show expr
     show (Lambda pos scope params expr) =
-        "\\#"++scope++"# "++(intercalate " " $ map show params)++" -> "++show expr
+        "#"++scope++"# "++(intercalate " " $ map show params)++" -> "++show expr
 
 data LetDecl = LetDecl Position PrimDecl
 

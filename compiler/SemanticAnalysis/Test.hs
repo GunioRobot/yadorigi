@@ -5,22 +5,35 @@ import Yadorigi.Syntax
 import Yadorigi.Parser.Parser
 import Yadorigi.Parser.Tokenizer
 import Yadorigi.SemanticAnalysis.BindScope
+import Yadorigi.SemanticAnalysis.ReferModule
 
 import Text.Parsec
+import Data.Functor
+import Data.Maybe
 import Control.Monad
+
+import System.Environment
 
 -- Tester
 
+parsing :: String -> String -> Either ParseError Module
+parsing filename contents =
+    case runParser tokenizer () filename contents of
+        (Right ts) -> runParser moduleParser () filename ts
+        (Left error) -> Left error
+
+
 main :: IO ()
 main = do
-    contents <- getContents
-    case runParser tokenizer () "<interactive>" contents of
-        (Right ts) ->
-            case runParser moduleParser () "<tokenStream>" ts of
-                (Right result) -> do
-                    print result
-                    putStrLn "bindScopeName"
-                    print $ bindScope_ declScopeList result
-                (Left error) -> print error
-        (Left error) -> print error
+    files <- getArgs
+    parsedData <- map (uncurry parsing) <$> zip files <$> mapM readFile files
+    let errors = catMaybes $ map (either Just (const Nothing)) parsedData
+        succs = catMaybes $ map (either (const Nothing) Just) parsedData
+        entities = referModule $ map (bindScope_ declScopeList) succs
+    putStrLn "Error :"
+    mapM_ print errors
+    putStrLn "Success :"
+    mapM_ print succs
+    putStrLn "Entities :"
+    mapM_ print entities
 
