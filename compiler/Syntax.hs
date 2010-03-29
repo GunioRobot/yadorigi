@@ -22,29 +22,28 @@ instance Show Import where
     show (Import qualified modname Nothing alias) =
         "import "++(if qualified then "qualified" else "")++intercalate "," modname++
         (maybe "" ((" as "++).intercalate ".") alias)
-    show (Import qualified modname (Just (hidden,imports)) alias) =
+    show (Import qualified modname (Just (hiding,imports)) alias) =
         "import "++(if qualified then "qualified" else "")++intercalate "," modname++
-        (if hidden then "hidden" else "")++" ("++intercalate "," (map show imports)++")"++
+        (if hiding then "hiding" else "")++" ("++intercalate "," (map show imports)++")"++
         (maybe "" ((" as "++).intercalate ".") alias)
 
 data ExportEntity
     = ModuleExportEntity ModuleName
-    | NameExportEntity ScopedName (Maybe [ScopedName]) deriving Eq
+    | NameExportEntity ScopedName (Maybe [String]) deriving Eq
 
 instance Show ExportEntity where
     show (ModuleExportEntity modname) = "module "++show modname
     show (NameExportEntity name Nothing) = show name++" (..)"
     show (NameExportEntity name (Just [])) = show name
     show (NameExportEntity name (Just children)) =
-        show name++" ("++intercalate " , " (map show children)++")"
+        show name++" ("++intercalate " , " children++")"
 
-data ImportEntity = ImportEntity ScopedName (Maybe [ScopedName]) deriving Eq
+data ImportEntity = ImportEntity String (Maybe [String]) deriving Eq
 
 instance Show ImportEntity where
-    show (ImportEntity name Nothing) = show name++" (..)"
-    show (ImportEntity name (Just [])) = show name
+    show (ImportEntity name Nothing) = name++" (..)"
     show (ImportEntity name (Just children)) =
-        show name++" ("++intercalate " , " (map show children)++")"
+        show name++" ("++intercalate " , " children++")"
 
 -- Declaration
 

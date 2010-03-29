@@ -233,9 +233,9 @@ moduleParser = do
               let tlayout = tailElemLayout layout
               entity <- nameParser layout
               children <- option [] $
-                  layoutParentheses tlayout $ \l -> sepBy (nameParser l) (reservedToken "," l)
+                  layoutParentheses tlayout $ \l -> sepBy (unscopedNameParser l) (reservedToken "," l)
               return $ NameExportEntity entity $
-                  if children == [ScopedName [] ".."] then Nothing else Just children
+                  if children == [".."] then Nothing else Just children
           moduleExportEntityParser :: LayoutInfo -> Parsec TokenStream u ExportEntity
           moduleExportEntityParser layout = do
               let tlayout = tailElemLayout layout
@@ -251,20 +251,20 @@ importParser layout = do
     qualified <- option False $ fixedNameToken "qualified" tlayout >> return True
     modname <- moduleNameParser tlayout
     importList <- option Nothing $ do
-        hidden <- option False $ fixedNameToken "hidden" tlayout >> return True
+        hiding <- option False $ fixedNameToken "hiding" tlayout >> return True
         importList <- layoutParentheses tlayout $
             \l -> sepBy (importEntityParser l) (reservedToken "," l)
-        return $ Just (hidden,importList)
+        return $ Just (hiding,importList)
     alias <- option Nothing $ Just <$> (fixedNameToken "as" tlayout >> moduleNameParser tlayout)
     return $ Import qualified modname importList alias
     where importEntityParser :: LayoutInfo -> Parsec TokenStream u ImportEntity
           importEntityParser layout = do
               let tlayout = tailElemLayout layout
-              entity <- nameParser layout
+              entity <- unscopedNameParser layout
               children <- option [] $
-                  layoutParentheses tlayout $ \l -> sepBy (nameParser l) (reservedToken "," l)
+                  layoutParentheses tlayout $ \l -> sepBy (unscopedNameParser l) (reservedToken "," l)
               return $ ImportEntity entity $
-                  if children == [ScopedName [] ".."] then Nothing else Just children
+                  if children == [".."] then Nothing else Just children
 
 -- Declaration Parser
 

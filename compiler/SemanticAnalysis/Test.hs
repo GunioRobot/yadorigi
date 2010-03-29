@@ -35,5 +35,7 @@ main = do
     putStrLn "Success :"
     mapM_ print succs
     putStrLn "Entities :"
-    mapM_ print entities
+    case entities of
+        (Just entities') -> mapM_ print entities'
+        Nothing -> putStrLn "Error!"
 
