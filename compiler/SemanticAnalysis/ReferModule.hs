@@ -13,8 +13,8 @@ import Yadorigi.Syntax
 
 type NameInfo = (ScopedName,[String],ModuleName)
 type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])
-type ImportError
-    | ExportConflict ModuleName String [ModuleName]
+data ImportError
+    = ExportConflict ModuleName String [ModuleName]
     | ModuleNotFound ModuleName ModuleName
     | ManyModuleFound ModuleName ModuleName
 
