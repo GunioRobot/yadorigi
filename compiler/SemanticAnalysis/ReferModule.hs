@@ -30,7 +30,7 @@ genModuleInfo (Module modname exports imports body) =
             [(ScopedName modname' name,children,modname) |
                 (name,children) <- concatMap declToName body,modname' <- [[],modname]]
         outsideNames = filterByExportList modname exports insideNames in
-            (modname,exports,Import False modname Nothing Nothing:imports,outsideNames,insideNames)
+            (modname,exports,imports,outsideNames,insideNames)
 
 declToName :: Decl -> [(String,[String])]
 declToName (Decl _ _ primdecl) = primDeclToName primdecl
@@ -70,7 +70,7 @@ referModuleIter modules = mapM (referModuleIter' modules) modules
 
 referModuleIter' :: [ModuleInfo] -> ModuleInfo -> Maybe ModuleInfo
 referModuleIter' env (modname,exports,imports,outsideNames,insideNames) = do
-    insideNames' <- nub <$> concat <$> mapM (importModule env) imports
+    insideNames' <- (nub.(insideNames++).concat) <$> mapM (importModule env) imports
     let outsideNames' = filterByExportList modname exports insideNames'
     return (modname,exports,imports,outsideNames',insideNames')
 

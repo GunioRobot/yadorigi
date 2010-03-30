@@ -6,7 +6,7 @@ import Yadorigi.Syntax
 import Yadorigi.Parser.DataTypes
 
 import Text.Parsec
-import Control.Applicative ((<$>),(<*),(*>),(<*>),(<**>))
+import Control.Applicative ((<$>),(<$),(<*),(*>),(<*>),(<**>))
 import Control.Monad
 import Data.Char
 import Data.Maybe
@@ -232,10 +232,12 @@ moduleParser = do
           nameExportEntityParser layout = do
               let tlayout = tailElemLayout layout
               entity <- nameParser layout
-              children <- option [] $
-                  layoutParentheses tlayout $ \l -> sepBy (unscopedNameParser l) (reservedToken "," l)
-              return $ NameExportEntity entity $
-                  if children == [".."] then Nothing else Just children
+              children <-
+                  (try $ layoutParentheses tlayout $
+                      \l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) <|>
+                  (try $ layoutParentheses tlayout $ \l -> Nothing <$ fixedOpToken ".." l) <|>
+                  (return $ Just [])
+              return $ NameExportEntity entity children
           moduleExportEntityParser :: LayoutInfo -> Parsec TokenStream u ExportEntity
           moduleExportEntityParser layout = do
               let tlayout = tailElemLayout layout
@@ -261,10 +263,12 @@ importParser layout = do
           importEntityParser layout = do
               let tlayout = tailElemLayout layout
               entity <- unscopedNameParser layout
-              children <- option [] $
-                  layoutParentheses tlayout $ \l -> sepBy (unscopedNameParser l) (reservedToken "," l)
-              return $ ImportEntity entity $
-                  if children == [".."] then Nothing else Just children
+              children <-
+                  (try $ layoutParentheses tlayout $
+                      \l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) <|>
+                  (try $ layoutParentheses tlayout $ \l -> Nothing <$ fixedOpToken ".." l) <|>
+                  (return $ Just [])
+              return $ ImportEntity entity children
 
 -- Declaration Parser
 
