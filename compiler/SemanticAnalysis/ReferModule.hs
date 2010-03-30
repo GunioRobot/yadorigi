@@ -8,21 +8,29 @@ import Data.Tuple.All
 import Control.Arrow
 
 import Yadorigi.Common
+import Yadorigi.Monad.Either
 import Yadorigi.Syntax
 
 type NameInfo = (ScopedName,[String],ModuleName)
+type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])
+type ImportError
+    | ExportConflict ModuleName String [ModuleName]
+    | ModuleNotFound ModuleName ModuleName
+    | ManyModuleFound ModuleName ModuleName
 
 referModule :: [Module] -> Maybe [(ModuleName,[NameInfo])]
 referModule modules =
     map (sel1&&&sel5) <$> iterateToConvergeM referModuleIter (map genModuleInfo modules)
 
+-- get module information
 
-genModuleInfo :: Module -> (ModuleName,(Maybe [ExportEntity]),[Import],[NameInfo],[NameInfo])
+genModuleInfo :: Module -> ModuleInfo
 genModuleInfo (Module modname exports imports body) =
-    (modname,exports,imports,[],
-        [(ScopedName modname' name,children,modname) |
-            (name,children) <- concatMap declToName body,
-            modname' <- [[],modname]])
+    let insideNames = nub
+            [(ScopedName modname' name,children,modname) |
+                (name,children) <- concatMap declToName body,modname' <- [[],modname]]
+        outsideNames = filterByExportList modname exports insideNames in
+            (modname,exports,Import False modname Nothing Nothing:imports,outsideNames,insideNames)
 
 declToName :: Decl -> [(String,[String])]
 declToName (Decl _ _ primdecl) = primDeclToName primdecl
@@ -55,28 +63,23 @@ primPatternToNames (BindPrimPattern str (Just pat)) = str:patternToNames pat
 primPatternToNames (ParenthesesPrimPattern pat) = patternToNames pat
 primPatternToNames (PrimPatternWithType pat _) = patternToNames pat
 
+-- refer module iterator
 
-referModuleIter ::
-    [(ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])] ->
-    Maybe [(ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])]
+referModuleIter :: [ModuleInfo] -> Maybe [ModuleInfo]
 referModuleIter modules = mapM (referModuleIter' modules) modules
 
-referModuleIter' ::
-    [(ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])] ->
-    (ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo]) ->
-    Maybe (ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])
+referModuleIter' :: [ModuleInfo] -> ModuleInfo -> Maybe ModuleInfo
 referModuleIter' env (modname,exports,imports,outsideNames,insideNames) = do
-    importedNames <- concat <$> mapM (importModule env) imports
-    let insideNames' = nub $ insideNames++importedNames
-        outsideNames' = filterByExportList modname exports insideNames'
+    insideNames' <- nub <$> concat <$> mapM (importModule env) imports
+    let outsideNames' = filterByExportList modname exports insideNames'
     return (modname,exports,imports,outsideNames',insideNames')
 
-importModule ::
-    [(ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])] -> Import -> Maybe [NameInfo]
+importModule :: [ModuleInfo] -> Import -> Maybe [NameInfo]
 importModule env (Import qualified modname imports alias) =
     case [mod | mod <- env , modname == sel1 mod] of
         [mod] -> Just $ filterByImportList imports
             ((if qualified then id else ([]:)) [fromMaybe modname alias]) (sel4 mod)
+        [] -> Nothing
         _ -> Nothing
 
 filterByExportList :: ModuleName -> Maybe [ExportEntity] -> [NameInfo] -> [NameInfo]
