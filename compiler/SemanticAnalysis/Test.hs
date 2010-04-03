@@ -29,7 +29,7 @@ main = do
     parsedData <- map (uncurry parsing) <$> zip files <$> mapM readFile files
     let errors = catMaybes $ map (either Just (const Nothing)) parsedData
         succs = catMaybes $ map (either (const Nothing) Just) parsedData
-        entities = referModule $ map (bindScope_ declScopeList) succs
+        entities = referModule $ map bindScope' succs
     putStrLn "Error :"
     mapM_ print errors
     putStrLn "Success :"

@@ -47,11 +47,10 @@ instance Show ImportEntity where
 
 -- Declaration
 
-data Decl = Decl Position String PrimDecl
+data Decl = Decl Position Int PrimDecl
 
 instance Show Decl where
-    show (Decl pos "" decl) = show decl
-    show (Decl pos scope decl) = "#"++scope++"# "++show decl
+    show (Decl pos scope decl) = "#"++show scope++"# "++show decl
 
 data PrimDecl
     = DataPrimDecl [TypeContext] String [String] [(String,[DataType])]
@@ -125,7 +124,7 @@ data PrimExpr
     | ParenthesesPrimExpr Expr {- parentheses expression -}
     | ListPrimExpr [Expr] {- list expression -}
     | LambdaPrimExpr [Lambda] {- lambda expression -}
-    | LetPrimExpr String [LetDecl] Expr {- let expression -}
+    | LetPrimExpr Int [LetDecl] Expr {- let expression -}
     | IfPrimExpr Expr Expr Expr {- if expression -}
     | CasePrimExpr Expr [CasePattern] {- case Expression -}
     | TypeSignaturePrimExpr Expr DataTypeWithContext {- expression with data type information -}
@@ -139,30 +138,26 @@ instance Show PrimExpr where
     show (ParenthesesPrimExpr expr) = "("++show expr++")"
     show (ListPrimExpr list) = show list
     show (LambdaPrimExpr list) = "(\\"++(intercalate " | " $ map show list)++")"
-    show (LetPrimExpr "" list expr) = "(let "++show list++" "++show expr++")"
-    show (LetPrimExpr scope list expr) = "(let #"++scope++"# "++show list++" "++show expr++")"
+    show (LetPrimExpr scope list expr) = "(let #"++show scope++"# "++show list++" "++show expr++")"
     show (IfPrimExpr c t f) = "(if "++show c++" "++show t++" "++show f++")"
     show (CasePrimExpr expr list) = "(case "++show expr++" "++show list++")"
     show (TypeSignaturePrimExpr expr dataType) = "("++show expr++"::"++show dataType++")"
 
-data Lambda = Lambda Position String [PatternMatch] Expr
+data Lambda = Lambda Position Int [PatternMatch] Expr
 
 instance Show Lambda where
-    show (Lambda pos "" params expr) =
-        (intercalate " " $ map show params)++" -> "++show expr
     show (Lambda pos scope params expr) =
-        "#"++scope++"# "++(intercalate " " $ map show params)++" -> "++show expr
+        "#"++show scope++"# "++(intercalate " " $ map show params)++" -> "++show expr
 
 data LetDecl = LetDecl Position PrimDecl
 
 instance Show LetDecl where
     show (LetDecl pos decl) = show decl
 
-data CasePattern = CasePattern String PatternMatch Rhs
+data CasePattern = CasePattern Int PatternMatch Rhs
 
 instance Show CasePattern where
-    show (CasePattern "" pattern expr) = show pattern++" "++show expr
-    show (CasePattern scope pattern expr) = "#"++scope++"# "++show pattern++" "++show expr
+    show (CasePattern scope pattern expr) = "#"++show scope++"# "++show pattern++" "++show expr
 
 -- Pattern Match
 

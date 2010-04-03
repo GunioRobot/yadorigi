@@ -273,11 +273,11 @@ importParser layout = do
 -- Declaration Parser
 
 topDeclParser :: LayoutInfo -> Parsec TokenStream u Decl
-topDeclParser layout = liftM3 Decl getPos (return "") (layoutChoice [dataDeclParser,typeDeclParser,
+topDeclParser layout = liftM3 Decl getPos (return 0) (layoutChoice [dataDeclParser,typeDeclParser,
     classDeclParser,instanceDeclParser,fixityDeclParser,typeSignatureParser,bindDeclParser] layout)
 
 declParser :: LayoutInfo -> Parsec TokenStream u Decl
-declParser layout = liftM3 Decl getPos (return "")
+declParser layout = liftM3 Decl getPos (return 0)
     (layoutChoice [fixityDeclParser,typeSignatureParser,bindDeclParser] layout)
 
 dataDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
@@ -436,7 +436,7 @@ lambdaExprParser layout = do
               params <- many1PatternParser tlayout
               reservedToken "->" tlayout
               expr <- exprParser 0 tlayout
-              return $ Lambda pos "" params expr
+              return $ Lambda pos 0 params expr
 
 letParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 letParser layout = do
@@ -445,7 +445,7 @@ letParser layout = do
     list <- offsideRuleMany1 letDeclParser tlayout
     reservedToken "in" tlayout
     expr <- exprParser 0 tlayout
-    return $ LetPrimExpr "" list expr
+    return $ LetPrimExpr 0 list expr
 
 letDeclParser :: LayoutInfo -> Parsec TokenStream u LetDecl
 letDeclParser layout = liftM2 LetDecl getPos
@@ -471,7 +471,7 @@ caseParser layout = do
     return $ CasePrimExpr expr list
     where tlayout = tailElemLayout layout
           casePatternParser layout = let tlayout = tailElemLayout layout in
-              liftM2 (CasePattern "") (aPatternParser layout) (rhsParser "->" tlayout)
+              liftM2 (CasePattern 0) (aPatternParser layout) (rhsParser "->" tlayout)
 
 applyParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 applyParser layout = do

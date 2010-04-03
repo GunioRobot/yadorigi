@@ -11,19 +11,13 @@ import Yadorigi.Syntax
 -- Bind Scope Name
 
 class BindScope t where
-    bindScope :: t -> State [String] t
-    bindScope_ :: [String] -> t -> t
-    bindScope_ strs t = evalState (bindScope t) strs
+    bindScope :: t -> State Int t
+    bindScope' :: t -> t
+    bindScope' t = evalState (bindScope t) 0
 
 
-declScopeList :: [String]
-declScopeList = map (("\\dcl"++).show) [0..]
-
-localScopeList :: [String]
-localScopeList = map (("\\scp"++).show) [0..]
-
-getNextScope :: State [String] String
-getNextScope = get >>= \(x:xs) -> put xs >> return x
+getNextScope :: State Int Int
+getNextScope = get >>= \n -> put (n+1) >> return n
 
 
 instance BindScope t => BindScope [t] where
@@ -32,27 +26,26 @@ instance BindScope t => BindScope [t] where
 
 instance BindScope Module where
     bindScope (Module modname exports imports decls) =
-        return $ Module modname exports imports $ bindScope_ declScopeList decls
+        return $ Module modname exports imports $ bindScope' decls
 
 
 instance BindScope Decl where
-    bindScope (Decl pos "" d) = do
+    bindScope (Decl pos _ d) = do
         scope <- getNextScope
         Decl pos scope <$> bindScope d
-    bindScope (Decl pos scope decl) = return $ Decl pos scope $ bindScope_ localScopeList decl
 
 instance BindScope PrimDecl where
     bindScope (ClassPrimDecl context classname typename body) =
-        return $ ClassPrimDecl context classname typename $ bindScope_ declScopeList body
+        return $ ClassPrimDecl context classname typename $ bindScope' body
     bindScope (InstancePrimDecl context classname typename body) =
-        return $ InstancePrimDecl context classname typename $ bindScope_ declScopeList body
+        return $ InstancePrimDecl context classname typename $ bindScope' body
     bindScope (BindPrimDecl bind decls) =
-        return $ BindPrimDecl (bindScope_ localScopeList bind) (bindScope_ declScopeList decls)
+        return $ BindPrimDecl (bindScope' bind) (bindScope' decls)
     bindScope decl = return decl
 
 
 instance BindScope Bind where
-    bindScope (Bind lhs rhs) = return $ Bind lhs (bindScope_ localScopeList rhs)
+    bindScope (Bind lhs rhs) = return $ Bind lhs (bindScope' rhs)
 
 instance BindScope Rhs where
     bindScope (ExprRhs expr) = ExprRhs <$> bindScope expr
@@ -74,14 +67,9 @@ instance BindScope PrimExpr where
     bindScope (ParenthesesPrimExpr expr) = ParenthesesPrimExpr <$> bindScope expr
     bindScope (ListPrimExpr exprs) = ListPrimExpr <$> bindScope exprs
     bindScope (LambdaPrimExpr lambdas) = LambdaPrimExpr <$> bindScope lambdas
-    bindScope (LetPrimExpr "" lets expr) = do
+    bindScope (LetPrimExpr _ lets expr) = do
         scope <- getNextScope
-        let (lets',expr') =
-                evalState (liftM2 (,) (bindScope lets) (bindScope expr)) localScopeList
-        return $ LetPrimExpr scope lets' expr'
-    bindScope (LetPrimExpr scope lets expr) = do
-        let (lets',expr') =
-                evalState (liftM2 (,) (bindScope lets) (bindScope expr)) localScopeList
+        let (lets',expr') = evalState (liftM2 (,) (bindScope lets) (bindScope expr)) 0
         return $ LetPrimExpr scope lets' expr'
     bindScope (IfPrimExpr c t f) = liftM3 IfPrimExpr (bindScope c) (bindScope t) (bindScope f)
     bindScope (CasePrimExpr expr cases) = liftM2 CasePrimExpr (bindScope expr) (bindScope cases)
@@ -90,19 +78,15 @@ instance BindScope PrimExpr where
     bindScope expr = return expr
 
 instance BindScope Lambda where
-    bindScope (Lambda pos "" patterns expr) = do
+    bindScope (Lambda pos _ patterns expr) = do
         scope <- getNextScope
-        return $ Lambda pos scope patterns (bindScope_ localScopeList expr)
-    bindScope (Lambda pos scope patterns expr) =
-        Lambda pos scope patterns <$> bindScope expr
+        return $ Lambda pos scope patterns (bindScope' expr)
 
 instance BindScope LetDecl where
     bindScope (LetDecl pos decl) = LetDecl pos <$> bindScope decl
 
 instance BindScope CasePattern where
-    bindScope (CasePattern "" pattern expr) = do
+    bindScope (CasePattern _ pattern expr) = do
         scope <- getNextScope
-        return $ CasePattern scope pattern (bindScope_ localScopeList expr)
-    bindScope (CasePattern scope pattern expr) =
-        return $ CasePattern scope pattern (bindScope_ localScopeList expr)
+        return $ CasePattern scope pattern (bindScope' expr)
 
