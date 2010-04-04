@@ -16,16 +16,17 @@ instance Show Module where
         " ("++maybe ".." (intercalate ",".map show) exports++") where\n"++
         unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
 
-data Import = Import Bool ModuleName (Maybe (Bool,[ImportEntity])) (Maybe ModuleName) deriving Eq
+data Import = Import Position Bool ModuleName (Maybe ModuleName) (Maybe (Bool,[ImportEntity]))
+    deriving Eq
 
 instance Show Import where
-    show (Import qualified modname Nothing alias) =
-        "import "++(if qualified then "qualified" else "")++intercalate "," modname++
+    show (Import _ qualified modname alias Nothing) =
+        "import "++(if qualified then "qualified" else "")++intercalate "." modname++
         (maybe "" ((" as "++).intercalate ".") alias)
-    show (Import qualified modname (Just (hiding,imports)) alias) =
-        "import "++(if qualified then "qualified" else "")++intercalate "," modname++
-        (if hiding then "hiding" else "")++" ("++intercalate "," (map show imports)++")"++
-        (maybe "" ((" as "++).intercalate ".") alias)
+    show (Import _ qualified modname alias (Just (hiding,imports))) =
+        "import "++(if qualified then "qualified" else "")++intercalate "." modname++
+        (maybe "" ((" as "++).intercalate ".") alias)++
+        (if hiding then "hiding" else "")++" ("++intercalate "," (map show imports)++")"
 
 data ExportEntity
     = ModuleExportEntity ModuleName
@@ -50,7 +51,7 @@ instance Show ImportEntity where
 data Decl = Decl Position Int PrimDecl
 
 instance Show Decl where
-    show (Decl pos scope decl) = "#"++show scope++"# "++show decl
+    show (Decl _ scope decl) = "#"++show scope++"# "++show decl
 
 data PrimDecl
     = DataPrimDecl [TypeContext] String [String] [(String,[DataType])]
@@ -113,7 +114,7 @@ instance Show Guard where
 data Expr = Expr Position PrimExpr
 
 instance Show Expr where
-    show (Expr pos primExpr) = show primExpr
+    show (Expr _ primExpr) = show primExpr
 
 data PrimExpr
     = LiteralPrimExpr Literal {- literal expression -}
@@ -146,13 +147,13 @@ instance Show PrimExpr where
 data Lambda = Lambda Position Int [PatternMatch] Expr
 
 instance Show Lambda where
-    show (Lambda pos scope params expr) =
+    show (Lambda _ scope params expr) =
         "#"++show scope++"# "++(intercalate " " $ map show params)++" -> "++show expr
 
 data LetDecl = LetDecl Position PrimDecl
 
 instance Show LetDecl where
-    show (LetDecl pos decl) = show decl
+    show (LetDecl _ decl) = show decl
 
 data CasePattern = CasePattern Int PatternMatch Rhs
 
@@ -164,7 +165,7 @@ instance Show CasePattern where
 data PatternMatch = PatternMatch Position PrimPatternMatch
 
 instance Show PatternMatch where
-    show (PatternMatch pos pattern) = show pattern
+    show (PatternMatch _ pattern) = show pattern
 
 data PrimPatternMatch
     = DCPrimPattern ScopedName [PatternMatch] {- data constructor pattern -}

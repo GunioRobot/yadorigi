@@ -76,7 +76,8 @@ cNameToken = getToken f
 
 vNameToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 vNameToken = getToken f
-    where f (NameToken name@(ScopedName _ str)) | isLower (head str) || '_' == (head str) = Just name
+    where f (NameToken name@(ScopedName _ str))
+              | isLower (head str) || '_' == (head str) = Just name
           f _ = Nothing
 
 unscopedNameToken :: LayoutInfo -> Parsec TokenStream u String
@@ -249,16 +250,17 @@ moduleParser = do
 importParser :: LayoutInfo -> Parsec TokenStream u Import
 importParser layout = do
     let tlayout = tailElemLayout layout
+    pos <- getPos
     reservedToken "import" layout
     qualified <- option False $ fixedNameToken "qualified" tlayout >> return True
     modname <- moduleNameParser tlayout
+    alias <- option Nothing $ Just <$> (fixedNameToken "as" tlayout >> moduleNameParser tlayout)
     importList <- option Nothing $ do
         hiding <- option False $ fixedNameToken "hiding" tlayout >> return True
         importList <- layoutParentheses tlayout $
             \l -> sepBy (importEntityParser l) (reservedToken "," l)
         return $ Just (hiding,importList)
-    alias <- option Nothing $ Just <$> (fixedNameToken "as" tlayout >> moduleNameParser tlayout)
-    return $ Import qualified modname importList alias
+    return $ Import pos qualified modname alias importList
     where importEntityParser :: LayoutInfo -> Parsec TokenStream u ImportEntity
           importEntityParser layout = do
               let tlayout = tailElemLayout layout
@@ -551,7 +553,8 @@ singleDCPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 singleDCPatternParser layout = flip DCPrimPattern [] <$> cNameParser layout
 
 parenthesesPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
-parenthesesPatternParser layout = ParenthesesPrimPattern <$> layoutParentheses layout (patternParser 0)
+parenthesesPatternParser layout =
+    ParenthesesPrimPattern <$> layoutParentheses layout (patternParser 0)
 
 listPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 listPatternParser layout = ListPrimPattern <$>
@@ -564,14 +567,11 @@ typeWithContextParser layout = let tlayout = tailElemLayout layout in
     liftM3 DataTypeWithContext getPos (contextParser layout) (typeParser 0 tlayout)
 
 contextParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]
-contextParser layout = option [] $ try $ do
-    let tlayout = tailElemLayout layout
-    reservedToken "(" layout
-    body <- sepBy1 (liftM3 TypeContext getPos (cNameParser tlayout) (typeParser 0 tlayout))
-        (reservedToken "," tlayout)
-    reservedToken ")" tlayout
-    reservedToken "=>" tlayout
-    return body
+contextParser layout = let tlayout = tailElemLayout layout in
+    option [] $ try $ (layoutParentheses layout (\l -> sepBy1 (oneContext l) (reservedToken "," l))
+        <|> (return <$> oneContext layout)) <* reservedToken "=>" tlayout
+    where oneContext layout = let tlayout = tailElemLayout layout in
+              liftM3 TypeContext getPos (cNameParser layout) (typeParser 0 tlayout)
 
 typeParser :: Int -> LayoutInfo -> Parsec TokenStream u DataType
 typeParser n layout = liftM2 DataType getPos (primTypeParser n layout)
@@ -589,7 +589,8 @@ functionTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 functionTypeParser layout = do
     let tlayout = tailElemLayout layout
     f <- typeParser 1 layout
-    option (primDataType f) $ FunctionPrimType f <$> (reservedToken "->" tlayout >> typeParser 0 layout)
+    option (primDataType f) $ FunctionPrimType f <$>
+        (reservedToken "->" tlayout >> typeParser 0 layout)
 
 composedTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 composedTypeParser layout = do

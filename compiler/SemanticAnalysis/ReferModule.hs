@@ -15,8 +15,8 @@ import Yadorigi.Syntax
 
 data ImportError
     = ExportConflict ModuleName String [ModuleName]
-    | ModuleNotFound ModuleName ModuleName
-    | ManyModuleFound ModuleName ModuleName deriving Show
+    | ModuleNotFound Position ModuleName ModuleName
+    | ManyModuleFound Position ModuleName ModuleName deriving Show
 
 type NameInfo = (ScopedName,[String],ModuleName)
 type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])
@@ -82,12 +82,12 @@ referModuleIter' env (modname,exports,imports,outsideNames,insideNames) = do
     return (modname,exports,imports,outsideNames',insideNames')
 
 importModule :: [ModuleInfo] -> ModuleName -> Import -> Either ImportError [NameInfo]
-importModule env modname (Import qualified modname' imports alias) =
+importModule env modname (Import pos qualified modname' alias imports) =
     case [mod | mod <- env, modname' == sel1 mod] of
         [mod] -> return $ filterByImportList imports
             ((if qualified then id else ([]:)) [fromMaybe modname' alias]) (sel4 mod)
-        [] -> Left $ ModuleNotFound modname modname'
-        _ -> Left $ ManyModuleFound modname modname'
+        [] -> Left $ ModuleNotFound pos modname modname'
+        _ -> Left $ ManyModuleFound pos modname modname'
 
 filterByExportList :: ModuleName -> Maybe [ExportEntity] -> [NameInfo] -> [NameInfo]
 filterByExportList modname exports names = nub
