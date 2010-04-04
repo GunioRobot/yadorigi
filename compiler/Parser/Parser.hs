@@ -143,46 +143,46 @@ reservedToken s = getToken f
 -- Name and Operator Parser
 
 nameParser :: LayoutInfo -> Parsec TokenStream u ScopedName
-nameParser layout = nameToken layout <|> try (layoutParentheses layout opToken)
+nameParser layout = nameToken layout <|> try (layoutParentheses opToken layout)
 
 cNameParser :: LayoutInfo -> Parsec TokenStream u ScopedName
-cNameParser layout = cNameToken layout <|> try (layoutParentheses layout cOpToken)
+cNameParser layout = cNameToken layout <|> try (layoutParentheses cOpToken layout)
 
 vNameParser :: LayoutInfo -> Parsec TokenStream u ScopedName
-vNameParser layout = vNameToken layout <|> try (layoutParentheses layout vOpToken)
+vNameParser layout = vNameToken layout <|> try (layoutParentheses vOpToken layout)
 
 unscopedNameParser :: LayoutInfo -> Parsec TokenStream u String
 unscopedNameParser layout =
-    unscopedNameToken layout <|> try (layoutParentheses layout unscopedOpToken)
+    unscopedNameToken layout <|> try (layoutParentheses unscopedOpToken layout)
 
 unscopedcNameParser :: LayoutInfo -> Parsec TokenStream u String
 unscopedcNameParser layout =
-    unscopedcNameToken layout <|> try (layoutParentheses layout unscopedcOpToken)
+    unscopedcNameToken layout <|> try (layoutParentheses unscopedcOpToken layout)
 
 unscopedvNameParser :: LayoutInfo -> Parsec TokenStream u String
 unscopedvNameParser layout =
-    unscopedvNameToken layout <|> try (layoutParentheses layout unscopedvOpToken)
+    unscopedvNameToken layout <|> try (layoutParentheses unscopedvOpToken layout)
 
 opParser :: LayoutInfo -> Parsec TokenStream u ScopedName
-opParser layout = opToken layout <|> try (layoutBackquotes layout nameToken)
+opParser layout = opToken layout <|> try (layoutBackquotes nameToken layout)
 
 cOpParser :: LayoutInfo -> Parsec TokenStream u ScopedName
-cOpParser layout = cOpToken layout <|> try (layoutBackquotes layout cNameToken)
+cOpParser layout = cOpToken layout <|> try (layoutBackquotes cNameToken layout)
 
 vOpParser :: LayoutInfo -> Parsec TokenStream u ScopedName
-vOpParser layout = vOpToken layout <|> try (layoutBackquotes layout vNameToken)
+vOpParser layout = vOpToken layout <|> try (layoutBackquotes vNameToken layout)
 
 unscopedOpParser :: LayoutInfo -> Parsec TokenStream u String
 unscopedOpParser layout =
-     unscopedOpToken layout <|> try (layoutBackquotes layout unscopedNameToken)
+     unscopedOpToken layout <|> try (layoutBackquotes unscopedNameToken layout)
 
 unscopedcOpParser :: LayoutInfo -> Parsec TokenStream u String
 unscopedcOpParser layout =
-     unscopedcOpToken layout <|> try (layoutBackquotes layout unscopedcNameToken)
+     unscopedcOpToken layout <|> try (layoutBackquotes unscopedcNameToken layout)
 
 unscopedvOpParser :: LayoutInfo -> Parsec TokenStream u String
 unscopedvOpParser layout =
-     unscopedvOpToken layout <|> try (layoutBackquotes layout unscopedvNameToken)
+     unscopedvOpToken layout <|> try (layoutBackquotes unscopedvNameToken layout)
 
 moduleNameParser :: LayoutInfo -> Parsec TokenStream u ModuleName
 moduleNameParser layout =
@@ -197,16 +197,16 @@ offsideRuleMany parser layout = (getPosWithTest layout >>= many.parser.Right .sn
 offsideRuleMany1 :: (LayoutInfo -> Parsec [s] u a) -> LayoutInfo -> Parsec [s] u [a]
 offsideRuleMany1 parser layout = getPosWithTest layout >>= many1.parser.Right .snd
 
-layoutParentheses :: LayoutInfo -> (LayoutInfo -> Parsec TokenStream u a) -> Parsec TokenStream u a
-layoutParentheses layout parser = let tlayout = tailElemLayout layout in
+layoutParentheses :: (LayoutInfo -> Parsec TokenStream u a) -> LayoutInfo -> Parsec TokenStream u a
+layoutParentheses parser layout = let tlayout = tailElemLayout layout in
     between (reservedToken "(" layout) (reservedToken ")" tlayout) (parser tlayout)
 
-layoutBracket :: LayoutInfo -> (LayoutInfo -> Parsec TokenStream u a) -> Parsec TokenStream u a
-layoutBracket layout parser = let tlayout = tailElemLayout layout in
+layoutBracket :: (LayoutInfo -> Parsec TokenStream u a) -> LayoutInfo -> Parsec TokenStream u a
+layoutBracket parser layout = let tlayout = tailElemLayout layout in
     between (reservedToken "[" layout) (reservedToken "]" tlayout) (parser tlayout)
 
-layoutBackquotes :: LayoutInfo -> (LayoutInfo -> Parsec TokenStream u a) -> Parsec TokenStream u a
-layoutBackquotes layout parser = let tlayout = tailElemLayout layout in
+layoutBackquotes :: (LayoutInfo -> Parsec TokenStream u a) -> LayoutInfo -> Parsec TokenStream u a
+layoutBackquotes parser layout = let tlayout = tailElemLayout layout in
     between (reservedToken "`" layout) (reservedToken "`" tlayout) (parser tlayout)
 
 layoutChoice :: [LayoutInfo -> Parsec TokenStream u a] -> LayoutInfo -> Parsec TokenStream u a
@@ -222,7 +222,7 @@ moduleParser = do
         reservedToken "module" layout
         modname <- option [] $ moduleNameParser tlayout
         exportList <- option Nothing $ Just <$>
-            (layoutParentheses tlayout $ \l -> sepBy (exportEntityParser l) (reservedToken "," l))
+            (layoutParentheses (\l -> sepBy (exportEntityParser l) (reservedToken "," l)) tlayout)
         reservedToken "where" tlayout
         return (modname,exportList)
     imports <- offsideRuleMany importParser layout
@@ -233,10 +233,9 @@ moduleParser = do
           nameExportEntityParser layout = do
               let tlayout = tailElemLayout layout
               entity <- nameParser layout
-              children <-
-                  (try $ layoutParentheses tlayout $
-                      \l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) <|>
-                  (try $ layoutParentheses tlayout $ \l -> Nothing <$ fixedOpToken ".." l) <|>
+              children <- (try $ layoutParentheses
+                  (\l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) tlayout) <|>
+                  (try $ layoutParentheses (\l -> Nothing <$ fixedOpToken ".." l) tlayout) <|>
                   (return $ Just [])
               return $ NameExportEntity entity children
           moduleExportEntityParser :: LayoutInfo -> Parsec TokenStream u ExportEntity
@@ -257,18 +256,17 @@ importParser layout = do
     alias <- option Nothing $ Just <$> (fixedNameToken "as" tlayout >> moduleNameParser tlayout)
     importList <- option Nothing $ do
         hiding <- option False $ fixedNameToken "hiding" tlayout >> return True
-        importList <- layoutParentheses tlayout $
-            \l -> sepBy (importEntityParser l) (reservedToken "," l)
+        importList <-
+            layoutParentheses (\l -> sepBy (importEntityParser l) (reservedToken "," l)) tlayout
         return $ Just (hiding,importList)
     return $ Import pos qualified modname alias importList
     where importEntityParser :: LayoutInfo -> Parsec TokenStream u ImportEntity
           importEntityParser layout = do
               let tlayout = tailElemLayout layout
               entity <- unscopedNameParser layout
-              children <-
-                  (try $ layoutParentheses tlayout $
-                      \l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) <|>
-                  (try $ layoutParentheses tlayout $ \l -> Nothing <$ fixedOpToken ".." l) <|>
+              children <- (try $ layoutParentheses
+                  (\l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) tlayout) <|>
+                  (try $ layoutParentheses (\l -> Nothing <$ fixedOpToken ".." l) tlayout) <|>
                   (return $ Just [])
               return $ ImportEntity entity children
 
@@ -488,11 +486,11 @@ literalParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 literalParser layout = LiteralPrimExpr <$> literalToken layout
 
 parenthesesParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
-parenthesesParser layout = ParenthesesPrimExpr <$> layoutParentheses layout (exprParser 0)
+parenthesesParser layout = ParenthesesPrimExpr <$> layoutParentheses (exprParser 0) layout
 
 listParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 listParser layout = ListPrimExpr <$>
-    layoutBracket layout (\l -> sepBy (exprParser 0 l) (reservedToken "," l))
+    layoutBracket (\l -> sepBy (exprParser 0 l) (reservedToken "," l)) layout
 
 -- Pattern Match Parser
 
@@ -554,11 +552,11 @@ singleDCPatternParser layout = flip DCPrimPattern [] <$> cNameParser layout
 
 parenthesesPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 parenthesesPatternParser layout =
-    ParenthesesPrimPattern <$> layoutParentheses layout (patternParser 0)
+    ParenthesesPrimPattern <$> layoutParentheses (patternParser 0) layout
 
 listPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 listPatternParser layout = ListPrimPattern <$>
-    layoutBracket layout (\l -> sepBy (patternParser 0 l) (reservedToken "," l))
+    layoutBracket (\l -> sepBy (patternParser 0 l) (reservedToken "," l)) layout
 
 -- Type Name Parser
 
@@ -568,8 +566,9 @@ typeWithContextParser layout = let tlayout = tailElemLayout layout in
 
 contextParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]
 contextParser layout = let tlayout = tailElemLayout layout in
-    option [] $ try $ (layoutParentheses layout (\l -> sepBy1 (oneContext l) (reservedToken "," l))
-        <|> (return <$> oneContext layout)) <* reservedToken "=>" tlayout
+    option [] $ try $
+        (layoutParentheses (\l -> sepBy1 (oneContext l) (reservedToken "," l)) layout <|>
+        (return <$> oneContext layout)) <* reservedToken "=>" tlayout
     where oneContext layout = let tlayout = tailElemLayout layout in
               liftM3 TypeContext getPos (cNameParser layout) (typeParser 0 tlayout)
 
