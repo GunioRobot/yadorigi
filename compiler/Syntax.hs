@@ -240,10 +240,12 @@ instance Show Literal where
 
 type ModuleName = [String]
 
-data ScopedName = ScopedName ModuleName String deriving Eq
+type ScopeName = [Int]
+
+data ScopedName = ScopedName ModuleName ScopeName String deriving Eq
 
 instance Show ScopedName where
-    show (ScopedName scope name) = concatMap (++".") scope++name
+    show (ScopedName modname scope name) = concatMap (++".") (modname++map show scope)++name
 
 -- Position
 

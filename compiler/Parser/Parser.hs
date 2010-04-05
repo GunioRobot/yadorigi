@@ -71,33 +71,33 @@ nameToken = getToken f
 
 cNameToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 cNameToken = getToken f
-    where f (NameToken name@(ScopedName _ str)) | isUpper (head str) = Just name
+    where f (NameToken name@(ScopedName _ _ str)) | isUpper (head str) = Just name
           f _ = Nothing
 
 vNameToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 vNameToken = getToken f
-    where f (NameToken name@(ScopedName _ str))
+    where f (NameToken name@(ScopedName _ _ str))
               | isLower (head str) || '_' == (head str) = Just name
           f _ = Nothing
 
 unscopedNameToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedNameToken = getToken f
-    where f (NameToken (ScopedName [] str)) = Just str
+    where f (NameToken (ScopedName [] _ str)) = Just str
           f _ = Nothing
 
 unscopedcNameToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedcNameToken = getToken f
-    where f (NameToken (ScopedName [] str)) | isUpper (head str) = Just str
+    where f (NameToken (ScopedName [] _ str)) | isUpper (head str) = Just str
           f _ = Nothing
 
 unscopedvNameToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedvNameToken = getToken f
-    where f (NameToken (ScopedName [] str)) | isLower (head str) || '_' == (head str) = Just str
+    where f (NameToken (ScopedName [] _ str)) | isLower (head str) || '_' == (head str) = Just str
           f _ = Nothing
 
 fixedNameToken :: String -> LayoutInfo -> Parsec TokenStream u ScopedName
 fixedNameToken str = getToken f
-    where f (NameToken op@(ScopedName [] str')) | str == str' = Just op
+    where f (NameToken op@(ScopedName [] _ str')) | str == str' = Just op
           f _ = Nothing
 
 opToken :: LayoutInfo -> Parsec TokenStream u ScopedName
@@ -107,32 +107,32 @@ opToken = getToken f
 
 cOpToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 cOpToken = getToken f
-    where f (OpToken op@(ScopedName _ str)) | head str == ':' = Just op
+    where f (OpToken op@(ScopedName _ _ str)) | head str == ':' = Just op
           f _ = Nothing
 
 vOpToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 vOpToken = getToken f
-    where f (OpToken op@(ScopedName _ str)) | head str /= ':' = Just op
+    where f (OpToken op@(ScopedName _ _ str)) | head str /= ':' = Just op
           f _ = Nothing
 
 unscopedOpToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedOpToken = getToken f
-    where f (OpToken (ScopedName [] str)) = Just str
+    where f (OpToken (ScopedName [] _ str)) = Just str
           f _ = Nothing
 
 unscopedcOpToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedcOpToken = getToken f
-    where f (OpToken (ScopedName [] str)) | head str == ':' = Just str
+    where f (OpToken (ScopedName [] _ str)) | head str == ':' = Just str
           f _ = Nothing
 
 unscopedvOpToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedvOpToken = getToken f
-    where f (OpToken (ScopedName [] str)) | head str /= ':' = Just str
+    where f (OpToken (ScopedName [] _ str)) | head str /= ':' = Just str
           f _ = Nothing
 
 fixedOpToken :: String -> LayoutInfo -> Parsec TokenStream u ScopedName
 fixedOpToken str = getToken f
-    where f (OpToken op@(ScopedName [] str')) | str == str' = Just op
+    where f (OpToken op@(ScopedName [] _ str')) | str == str' = Just op
           f _ = Nothing
 
 reservedToken :: String -> LayoutInfo -> Parsec TokenStream u Token
@@ -186,7 +186,7 @@ unscopedvOpParser layout =
 
 moduleNameParser :: LayoutInfo -> Parsec TokenStream u ModuleName
 moduleNameParser layout =
-    do (ScopedName a b) <- cNameToken layout
+    do (ScopedName a _ b) <- cNameToken layout
        return (a++[b])
 
 -- Parser Combinators

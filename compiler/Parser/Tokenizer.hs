@@ -1,4 +1,6 @@
 
+{-# LANGUAGE TupleSections #-}
+
 module Yadorigi.Parser.Tokenizer (tokenizer) where
 
 import Yadorigi.Syntax
@@ -87,17 +89,17 @@ nameOpTokenizer =
     do ns <- namespaceTokenizer
        t <- nameTokenizer <|> opTokenizer
        return $ case t of
-           (NameToken (ScopedName _ s)) -> if elem s reservedStr && null ns
-               then ReservedToken s else NameToken $ ScopedName ns s
-           (OpToken (ScopedName _ s)) -> if elem s reservedStr && null ns
-               then ReservedToken s else OpToken $ ScopedName ns s
+           (True,s) -> if elem s reservedStr && null ns
+               then ReservedToken s else NameToken $ ScopedName ns [] s
+           (False,s) -> if elem s reservedStr && null ns
+               then ReservedToken s else OpToken $ ScopedName ns [] s
 
-nameTokenizer :: Parsec String u Token
-nameTokenizer = (NameToken .ScopedName []) <$>
+nameTokenizer :: Parsec String u (Bool,String)
+nameTokenizer = (True,) <$>
     liftM2 (:) (letter <|> char '_') (many (alphaNum <|> oneOf "_\'"))
 
-opTokenizer :: Parsec String u Token
-opTokenizer = (OpToken .ScopedName []) <$> liftM2 (:) opc (many opc)
+opTokenizer :: Parsec String u (Bool,String)
+opTokenizer = (False,) <$> liftM2 (:) opc (many opc)
     where opc = oneOf "!#$%&*+-./:<=>?@^|"
 
 namespaceTokenizer :: Parsec String u [String]
