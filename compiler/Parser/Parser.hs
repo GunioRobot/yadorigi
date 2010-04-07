@@ -318,7 +318,7 @@ instanceDeclParser layout = do
     let tlayout = tailElemLayout layout
     reservedToken "instance" layout
     context <- contextParser tlayout
-    className <- unscopedcNameToken tlayout
+    className <- cNameToken tlayout
     inst <- typeParser 0 tlayout
     body <- option [] $ reservedToken "where" tlayout >> offsideRuleMany declParser tlayout
     return $ InstancePrimDecl context className inst body
@@ -327,7 +327,7 @@ fixityDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 fixityDeclParser layout = do
     fixity <- fixityParser
     num <- option Nothing (Just <$> operatorLevelParser)
-    ops <- sepBy1 (opParser tlayout) (reservedToken "," tlayout)
+    ops <- sepBy1 (unscopedOpParser tlayout) (reservedToken "," tlayout)
     return $ FixityPrimDecl fixity num ops
     where tlayout = tailElemLayout layout
           fixityParser = (reservedToken "infixl" layout >> return Infixl) <|>

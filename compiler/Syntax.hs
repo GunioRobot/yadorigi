@@ -12,7 +12,7 @@ instance Show Module where
     show (Module [] _ imports decls) =
         unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
     show (Module modname exports imports decls) =
-        "module "++intercalate "." modname++
+        "module "++showModuleName modname++
         " ("++maybe ".." (intercalate ",".map show) exports++") where\n"++
         unlines (map show imports)++"\n"++concatMap ((++"\n").show) decls
 
@@ -21,11 +21,11 @@ data Import = Import Position Bool ModuleName (Maybe ModuleName) (Maybe (Bool,[I
 
 instance Show Import where
     show (Import _ qualified modname alias Nothing) =
-        "import "++(if qualified then "qualified" else "")++intercalate "." modname++
-        (maybe "" ((" as "++).intercalate ".") alias)
+        "import "++(if qualified then "qualified" else "")++showModuleName modname++
+        (maybe "" ((" as "++).showModuleName) alias)
     show (Import _ qualified modname alias (Just (hiding,imports))) =
-        "import "++(if qualified then "qualified" else "")++intercalate "." modname++
-        (maybe "" ((" as "++).intercalate ".") alias)++
+        "import "++(if qualified then "qualified" else "")++showModuleName modname++
+        (maybe "" ((" as "++).showModuleName) alias)++
         (if hiding then "hiding" else "")++" ("++intercalate "," (map show imports)++")"
 
 data ExportEntity
@@ -57,8 +57,8 @@ data PrimDecl
     = DataPrimDecl [TypeContext] String [String] [(String,[DataType])]
     | TypePrimDecl String [String] DataTypeWithContext
     | ClassPrimDecl [TypeContext] String String [Decl]
-    | InstancePrimDecl [TypeContext] String DataType [Decl]
-    | FixityPrimDecl Fixity (Maybe Int) [ScopedName]
+    | InstancePrimDecl [TypeContext] ScopedName DataType [Decl]
+    | FixityPrimDecl Fixity (Maybe Int) [String]
     | TypeSignaturePrimDecl String DataTypeWithContext
     | BindPrimDecl Bind [Decl]
 
@@ -71,9 +71,10 @@ instance Show PrimDecl where
     show (ClassPrimDecl context className typeName body) =
         "class "++showContext context++className++" "++typeName++showWhereClause body
     show (InstancePrimDecl context className typeName body) =
-        "instance "++showContext context++className++" "++show typeName++showWhereClause body
+        "instance "++showContext context++show className++" "++show typeName++showWhereClause body
     show (FixityPrimDecl fixity Nothing list) = show fixity++" "++show list
-    show (FixityPrimDecl fixity (Just num) list) = show fixity++" "++show num++" "++show list
+    show (FixityPrimDecl fixity (Just num) list) =
+        show fixity++" "++show num++" "++intercalate " " list
     show (TypeSignaturePrimDecl str typeName) = str++" :: "++show typeName
     show (BindPrimDecl bind whereClause) = show bind++showWhereClause whereClause
 
@@ -138,7 +139,7 @@ instance Show PrimExpr where
     show (NegativePrimExpr expr) = "-"++show expr
     show (ParenthesesPrimExpr expr) = "("++show expr++")"
     show (ListPrimExpr list) = show list
-    show (LambdaPrimExpr list) = "(\\"++(intercalate " | " $ map show list)++")"
+    show (LambdaPrimExpr list) = "(\\"++intercalate " | " (map show list)++")"
     show (LetPrimExpr scope list expr) = "(let #"++show scope++"# "++show list++" "++show expr++")"
     show (IfPrimExpr c t f) = "(if "++show c++" "++show t++" "++show f++")"
     show (CasePrimExpr expr list) = "(case "++show expr++" "++show list++")"
@@ -148,7 +149,7 @@ data Lambda = Lambda Position Int [PatternMatch] Expr
 
 instance Show Lambda where
     show (Lambda _ scope params expr) =
-        "#"++show scope++"# "++(intercalate " " $ map show params)++" -> "++show expr
+        "#"++show scope++"# "++intercalate " " (map show params)++" -> "++show expr
 
 data LetDecl = LetDecl Position PrimDecl
 
@@ -263,4 +264,7 @@ showLayoutList = unlines.map ("    "++).concatMap (lines.show)
 showContext :: [TypeContext] -> String
 showContext [] = ""
 showContext context = "("++(intercalate "," (map show context))++") => "
+
+showModuleName :: ModuleName -> String
+showModuleName = intercalate "."
 
