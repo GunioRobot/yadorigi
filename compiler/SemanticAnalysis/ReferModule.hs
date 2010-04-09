@@ -10,6 +10,7 @@ import Control.Arrow
 import Yadorigi.Common
 import Yadorigi.Monad.Either
 import Yadorigi.Syntax
+import Yadorigi.SemanticAnalysis.Common
 
 -- Data Types
 
@@ -21,16 +22,11 @@ data ImportError
 type NameInfo = (ScopedName,[String],ModuleName)
 type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])
 
-
+-- refer module
 
 referModule :: [Module] -> Either ImportError [(ModuleName,[NameInfo])]
 referModule modules =
     map (sel1&&&sel5) <$> iterateToConvergeM referModuleIter (map genModuleInfo modules)
-
--- ToDo : write import list checker
---        write export list checker
-
--- get module information
 
 genModuleInfo :: Module -> ModuleInfo
 genModuleInfo (Module modname exports imports body) =
@@ -40,35 +36,8 @@ genModuleInfo (Module modname exports imports body) =
         outsideNames = filterByExportList modname exports insideNames in
             (modname,exports,imports,outsideNames,insideNames)
 
-declToName :: Decl -> [(String,[String])]
-declToName (Decl _ _ primdecl) = primDeclToName primdecl
-
-primDeclToName :: PrimDecl -> [(String,[String])]
-primDeclToName (DataPrimDecl _ name _ body) = [(name,nub $ map fst body)]
-primDeclToName (TypePrimDecl name _ _) = [(name,[])]
-primDeclToName (ClassPrimDecl _ name _ body) = [(name,nub $ concatMap (map sel1.declToName) body)]
-primDeclToName (InstancePrimDecl _ name _ body) = []
-primDeclToName (FixityPrimDecl _ _ _) = []
-primDeclToName (TypeSignaturePrimDecl name _) = [(name,[])]
-primDeclToName (BindPrimDecl (Bind lhs _) _) = lhsToName lhs
-
-lhsToName :: Lhs -> [(String,[String])]
-lhsToName (FunctionLhs name _) = [(name,[])]
-lhsToName (InfixLhs name _ _) = [(name,[])]
-lhsToName (PatternLhs pat) = map (id&&&const []) (patternToNames pat)
-
-patternToNames :: PatternMatch -> [String]
-patternToNames (PatternMatch _ pat) = primPatternToNames pat
-
-primPatternToNames :: PrimPatternMatch -> [String]
-primPatternToNames (DCPrimPattern _ pats) = concatMap patternToNames pats
-primPatternToNames (LiteralPrimPattern _) = []
-primPatternToNames (DCOpPrimPattern _ pat1 pat2) = patternToNames pat1++patternToNames pat2
-primPatternToNames (NegativePrimPattern pat) = patternToNames pat
-primPatternToNames (ListPrimPattern pats) = concatMap patternToNames pats
-primPatternToNames (BindPrimPattern str pat) = str:maybe [] patternToNames pat
-primPatternToNames (ParenthesesPrimPattern pat) = patternToNames pat
-primPatternToNames (PrimPatternWithType pat _) = patternToNames pat
+-- ToDo : write import list checker
+--        write export list checker
 
 -- refer module iterator
 
