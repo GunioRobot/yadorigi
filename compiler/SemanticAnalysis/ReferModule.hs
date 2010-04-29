@@ -79,8 +79,7 @@ importTypeModule env modname (Import pos qualified modname' alias imports) =
 
 -- Filter
 
-filterByExportList ::
-    ModuleName -> Maybe [ExportEntity] ->
+filterByExportList :: ModuleName -> Maybe [ExportEntity] ->
     [NameInfo NameWithModule] -> Either ImportError [NameInfo String]
 filterByExportList modname exports names =
     concat <$> mapM filterByExport (fromMaybe [ModuleExportEntity modname] exports)
@@ -89,13 +88,13 @@ filterByExportList modname exports names =
         filterByExport (ModuleExportEntity modname') =
             return $ [(name,smodname) | ((modname'',name),smodname) <- names, modname' == modname'']
         filterByExport (NameExportEntity (ScopedName modname' _ name) (Just [])) =
-            case [n | n <- names, elem modname' [fst $ fst n,[]] && name == snd (fst n)] of
-                l@(_:_:_) -> Left $ ExportConflict modname name [modname'' | ((modname'',_),_) <- l]
-                l -> return [(name,smodname) | ((_,name),smodname) <- l]
+            case nub [snd n | n <- names, elem modname' [fst $ fst n,[]] && name == snd (fst n)] of
+                [] -> return []
+                [smodname] -> return [(name,smodname)]
+                smodnames -> Left $ ExportConflict modname name smodnames
         filterByExport _ = return []
 
-typeFilterByExportList ::
-    ModuleName -> Maybe [ExportEntity] ->
+typeFilterByExportList :: ModuleName -> Maybe [ExportEntity] ->
     [TypeNameInfo NameWithModule] -> Either ImportError [TypeNameInfo String]
 typeFilterByExportList modname exports names =
     concat <$> mapM filterByExport (fromMaybe [ModuleExportEntity modname] exports)
@@ -105,14 +104,15 @@ typeFilterByExportList modname exports names =
             return [(name,children,smodname) |
                 ((modname'',name),children,smodname) <- names, modname' == modname'']
         filterByExport (NameExportEntity (ScopedName modname' _ name) exportChildren) =
-            case [n | n <- names, elem modname' [fst $ sel1 n,[]], name == snd (sel1 n)] of
+            case nubBy (\(_,a) (_,b) -> a == b) [(sel2 n,sel3 n) |
+                    n <- names, elem modname' [fst $ sel1 n,[]], name == snd (sel1 n)] of
                 [] -> return []
-                [(name,children,smodname)] -> do
+                [(children,smodname)] -> do
                     let children' = fromMaybe [] (filter (flip notElem children) <$> exportChildren)
                     if null children'
-                        then return [(snd name,fromMaybe children exportChildren,smodname)]
-                        else Left $ ExportChildNotFound modname name children'
-                l@(_:_:_) -> Left $ ExportConflict modname name $ map (fst.sel1) l
+                        then return [(name,fromMaybe children exportChildren,smodname)]
+                        else Left $ ExportChildNotFound modname (modname',name) children'
+                l -> Left $ ExportConflict modname name $ map snd l
 
 -- ToDo : write filter
 filterByImportList :: Maybe (Bool,[ImportEntity]) ->
