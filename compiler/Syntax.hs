@@ -93,7 +93,7 @@ data Lhs
     | PatternLhs PatternMatch
 
 instance Show Lhs where
-    show (FunctionLhs name params) = name++concatMap ((' ':).show) params
+    show (FunctionLhs name param) = name++concatMap ((' ':).show) param
     show (InfixLhs name pat1 pat2) = show pat1++" "++name++" "++show pat2
     show (PatternLhs pat) = show pat
 
@@ -148,8 +148,8 @@ instance Show PrimExpr where
 data Lambda = Lambda Position Int [PatternMatch] Expr
 
 instance Show Lambda where
-    show (Lambda _ scope params expr) =
-        "#"++show scope++"# "++intercalate " " (map show params)++" -> "++show expr
+    show (Lambda _ scope param expr) =
+        "#"++show scope++"# "++intercalate " " (map show param)++" -> "++show expr
 
 data LetDecl = LetDecl Position PrimDecl
 
@@ -221,6 +221,12 @@ instance Show PrimDataType where
     show (ListPrimType param) = "["++show param++"]"
     show (FunctionPrimType t1 t2) = "("++show t1++" -> "++show t2++")"
     show (ParenthesesPrimType t) = "("++show t++")"
+
+--data Kind = AstKind | FuncKind Kind Kind
+--
+--instance Show Kind where
+--    show AstKind = "*"
+--    show (FuncKind a b) = "("++show a++" -> "show b++")"
 
 -- Literal
 

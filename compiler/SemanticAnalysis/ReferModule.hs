@@ -16,25 +16,32 @@ import Yadorigi.SemanticAnalysis.Common
 
 data ImportError
     = ExportConflict ModuleName String [ModuleName]
+    | ExportChildNotFound ModuleName NameWithModule [String]
     | ModuleNotFound Position ModuleName ModuleName
     | ManyModuleFound Position ModuleName ModuleName deriving Show
 
-type NameInfo = (ScopedName,[String],ModuleName)
-type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],[NameInfo],[NameInfo])
+type NameWithModule = (ModuleName,String)
+type NameInfo name = (name,ModuleName)
+type TypeNameInfo name = (name,[String],ModuleName)
+type NameEnv name = ([NameInfo name],[TypeNameInfo name])
+type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],NameEnv String,NameEnv NameWithModule)
 
 -- refer module
 
-referModule :: [Module] -> Either ImportError [(ModuleName,[NameInfo])]
-referModule modules =
-    map (sel1&&&sel5) <$> iterateToConvergeM referModuleIter (map genModuleInfo modules)
+referModule :: [Module] ->
+    Either ImportError [(ModuleName,[NameInfo NameWithModule],[TypeNameInfo NameWithModule])]
+referModule modules = map (\(modname,_,_,_,(names,types)) -> (modname,names,types)) <$>
+    (mapM genModuleInfo modules>>=iterateToConvergeM referModuleIter)
 
-genModuleInfo :: Module -> ModuleInfo
-genModuleInfo (Module modname exports imports body) =
-    let insideNames = nub
-            [(ScopedName modname' [] name,children,modname) |
-                (name,children) <- concatMap declToName body,modname' <- [[],modname]]
-        outsideNames = filterByExportList modname exports insideNames in
-            (modname,exports,imports,outsideNames,insideNames)
+genModuleInfo :: Module -> Either ImportError ModuleInfo
+genModuleInfo (Module modname exports imports body) = do
+    insideNames <- return $ nub [((modname',name),modname) |
+        name <- concatMap declToName body,modname' <- [[],modname]]
+    insideTypes <- return $ nub [((modname',name),children,modname) |
+        (name,children) <- concatMap declToTypeName body,modname' <- [[],modname]]
+    outsideNames <- filterByExportList modname exports insideNames
+    outsideTypes <- typeFilterByExportList modname exports insideTypes
+    return (modname,exports,imports,(outsideNames,outsideTypes),(insideNames,insideTypes))
 
 -- ToDo : write import list checker
 --        write export list checker
@@ -45,42 +52,80 @@ referModuleIter :: [ModuleInfo] -> Either ImportError [ModuleInfo]
 referModuleIter modules = mapM (referModuleIter' modules) modules
 
 referModuleIter' :: [ModuleInfo] -> ModuleInfo -> Either ImportError ModuleInfo
-referModuleIter' env (modname,exports,imports,outsideNames,insideNames) = do
+referModuleIter' env (modname,exports,imports,_,(insideNames,insideTypes)) = do
     insideNames' <- (nub.(insideNames++).concat) <$> mapM (importModule env modname) imports
-    let outsideNames' = filterByExportList modname exports insideNames'
-    return (modname,exports,imports,outsideNames',insideNames')
+    insideTypes' <- (nub.(insideTypes++).concat) <$> mapM (importTypeModule env modname) imports
+    outsideNames <- filterByExportList modname exports insideNames'
+    outsideTypes <- typeFilterByExportList modname exports insideTypes'
+    return (modname,exports,imports,(outsideNames,outsideTypes),(insideNames',insideTypes'))
 
-importModule :: [ModuleInfo] -> ModuleName -> Import -> Either ImportError [NameInfo]
+importModule ::
+    [ModuleInfo] -> ModuleName -> Import -> Either ImportError [NameInfo NameWithModule]
 importModule env modname (Import pos qualified modname' alias imports) =
     case [mod | mod <- env, modname' == sel1 mod] of
         [mod] -> return $ filterByImportList imports
-            ((if qualified then id else ([]:)) [fromMaybe modname' alias]) (sel4 mod)
+            ((if qualified then id else ([]:)) [fromMaybe modname' alias]) (fst $ sel4 mod)
         [] -> Left $ ModuleNotFound pos modname modname'
         _ -> Left $ ManyModuleFound pos modname modname'
 
-filterByExportList :: ModuleName -> Maybe [ExportEntity] -> [NameInfo] -> [NameInfo]
-filterByExportList modname exports names = nub
-    [(ScopedName [] [] name,children,smodname) |
-        export <- fromMaybe [ModuleExportEntity modname] exports,
-        (ScopedName _ _ name,children,smodname) <- catMaybes $ map (exportFilter export) names]
+importTypeModule ::
+    [ModuleInfo] -> ModuleName -> Import -> Either ImportError [TypeNameInfo NameWithModule]
+importTypeModule env modname (Import pos qualified modname' alias imports) =
+    case [mod | mod <- env, modname' == sel1 mod] of
+        [mod] -> return $ typeFilterByImportList imports
+            ((if qualified then id else ([]:)) [fromMaybe modname' alias]) (snd $ sel4 mod)
+        [] -> Left $ ModuleNotFound pos modname modname'
+        _ -> Left $ ManyModuleFound pos modname modname'
 
-exportFilter :: ExportEntity -> NameInfo -> Maybe NameInfo
-exportFilter (ModuleExportEntity modname) entity@(ScopedName modname' _ _,_,_)
-    | modname == modname' = Just entity
-exportFilter (NameExportEntity (ScopedName modname _ name) childrenExports)
-    (ScopedName modname' _ name',children,modname'')
-    | name == name' && (null modname || modname == modname') =
-        Just (ScopedName modname' [] name',filteredChildren,modname'')
-    where filteredChildren = nub [name | export <- fromMaybe children childrenExports,
-              name <- children, export == name]
-exportFilter _ _ = Nothing
+-- Filter
+
+filterByExportList ::
+    ModuleName -> Maybe [ExportEntity] ->
+    [NameInfo NameWithModule] -> Either ImportError [NameInfo String]
+filterByExportList modname exports names =
+    concat <$> mapM filterByExport (fromMaybe [ModuleExportEntity modname] exports)
+    where
+        filterByExport :: ExportEntity -> Either ImportError [NameInfo String]
+        filterByExport (ModuleExportEntity modname') =
+            return $ [(name,smodname) | ((modname'',name),smodname) <- names, modname' == modname'']
+        filterByExport (NameExportEntity (ScopedName modname' _ name) (Just [])) =
+            case [n | n <- names, elem modname' [fst $ fst n,[]] && name == snd (fst n)] of
+                l@(_:_:_) -> Left $ ExportConflict modname name [modname'' | ((modname'',_),_) <- l]
+                l -> return [(name,smodname) | ((_,name),smodname) <- l]
+        filterByExport _ = return []
+
+typeFilterByExportList ::
+    ModuleName -> Maybe [ExportEntity] ->
+    [TypeNameInfo NameWithModule] -> Either ImportError [TypeNameInfo String]
+typeFilterByExportList modname exports names =
+    concat <$> mapM filterByExport (fromMaybe [ModuleExportEntity modname] exports)
+    where
+        filterByExport :: ExportEntity -> Either ImportError [TypeNameInfo String]
+        filterByExport (ModuleExportEntity modname') =
+            return [(name,children,smodname) |
+                ((modname'',name),children,smodname) <- names, modname' == modname'']
+        filterByExport (NameExportEntity (ScopedName modname' _ name) exportChildren) =
+            case [n | n <- names, elem modname' [fst $ sel1 n,[]], name == snd (sel1 n)] of
+                [] -> return []
+                [(name,children,smodname)] -> do
+                    let children' = fromMaybe [] (filter (flip notElem children) <$> exportChildren)
+                    if null children'
+                        then return [(snd name,fromMaybe children exportChildren,smodname)]
+                        else Left $ ExportChildNotFound modname name children'
+                l@(_:_:_) -> Left $ ExportConflict modname name $ map (fst.sel1) l
 
 -- ToDo : write filter
-filterByImportList ::
-    Maybe (Bool,[ImportEntity]) -> [ModuleName] -> [NameInfo] -> [NameInfo]
+filterByImportList :: Maybe (Bool,[ImportEntity]) ->
+    [ModuleName] -> [NameInfo String] -> [NameInfo NameWithModule]
 filterByImportList Nothing modnames names =
-    [(ScopedName modname [] name,children,smodname) |
-        (ScopedName _ _ name,children,smodname) <- names,
-        modname <- modnames]
+    [((modname,name),smodname) | (name,smodname) <- names, modname <- modnames]
 filterByImportList (Just (False,imports)) modnames names = writeLater
+filterByImportList (Just (True,imports)) modnames names = writeLater
+
+typeFilterByImportList :: Maybe (Bool,[ImportEntity]) ->
+    [ModuleName] -> [TypeNameInfo String] -> [TypeNameInfo NameWithModule]
+typeFilterByImportList Nothing modnames names =
+    [((modname,name),children,smodname) | (name,children,smodname) <- names, modname <- modnames]
+typeFilterByImportList (Just (False,imports)) modnames names = writeLater
+typeFilterByImportList (Just (True,imports)) modnames names = writeLater
 

@@ -35,5 +35,5 @@ main = do
     putStrLn "Success :"
     mapM_ print succs
     putStrLn "Entities :"
-    either print (mapM_ print) entities
+    either print (mapM_ (\(a,b,c) -> print a>>print b>>print c>>putStr "\n")) entities
 
