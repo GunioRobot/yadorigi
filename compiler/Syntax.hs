@@ -126,7 +126,7 @@ data PrimExpr
     | ParenthesesPrimExpr Expr {- parentheses expression -}
     | ListPrimExpr [Expr] {- list expression -}
     | LambdaPrimExpr [Lambda] {- lambda expression -}
-    | LetPrimExpr Int [LetDecl] Expr {- let expression -}
+    | LetPrimExpr Int [(Position,PrimDecl)] Expr {- let expression -}
     | IfPrimExpr Expr Expr Expr {- if expression -}
     | CasePrimExpr Expr [CasePattern] {- case Expression -}
     | TypeSignaturePrimExpr Expr DataTypeWithContext {- expression with data type information -}
@@ -140,7 +140,8 @@ instance Show PrimExpr where
     show (ParenthesesPrimExpr expr) = "("++show expr++")"
     show (ListPrimExpr list) = show list
     show (LambdaPrimExpr list) = "(\\"++intercalate " | " (map show list)++")"
-    show (LetPrimExpr scope list expr) = "(let #"++show scope++"# "++show list++" "++show expr++")"
+    show (LetPrimExpr scope list expr) =
+        "(let #"++show scope++"# "++show (map snd list)++" "++show expr++")"
     show (IfPrimExpr c t f) = "(if "++show c++" "++show t++" "++show f++")"
     show (CasePrimExpr expr list) = "(case "++show expr++" "++show list++")"
     show (TypeSignaturePrimExpr expr dataType) = "("++show expr++"::"++show dataType++")"
@@ -150,11 +151,6 @@ data Lambda = Lambda Position Int [PatternMatch] Expr
 instance Show Lambda where
     show (Lambda _ scope param expr) =
         "#"++show scope++"# "++intercalate " " (map show param)++" -> "++show expr
-
-data LetDecl = LetDecl Position PrimDecl
-
-instance Show LetDecl where
-    show (LetDecl _ decl) = show decl
 
 data CasePattern = CasePattern Int PatternMatch Rhs
 
@@ -174,9 +170,10 @@ data PrimPatternMatch
     | DCOpPrimPattern ScopedName PatternMatch PatternMatch {- infix data constructor pattern -}
     | NegativePrimPattern PatternMatch {- negative pattern -}
     | ListPrimPattern [PatternMatch] {- list pattern -}
-    | BindPrimPattern String (Maybe PatternMatch) {- bind pattern, wild card pattern, as pattern -}
+    | BindPrimPattern String (Maybe PatternMatch) {- bind pattern, as pattern -}
     | ParenthesesPrimPattern PatternMatch {- Parentheses Pattern -}
     | PrimPatternWithType PatternMatch DataTypeWithContext {- pattern with data type information -}
+    | PrimWildCardPattern {- wild card pattern -}
 
 instance Show PrimPatternMatch where
     show (DCPrimPattern name list) = "("++show name++concatMap ((' ':).show) list++")"
@@ -186,6 +183,7 @@ instance Show PrimPatternMatch where
     show (BindPrimPattern str pattern) = "("++str++maybe "" (("@"++).show) pattern++")"
     show (ParenthesesPrimPattern pattern) = "("++show pattern++")"
     show (PrimPatternWithType pattern typeName) = "("++show pattern++show typeName++")"
+    show PrimWildCardPattern = "_"
 
 -- Data Type
 
@@ -222,11 +220,11 @@ instance Show PrimDataType where
     show (FunctionPrimType t1 t2) = "("++show t1++" -> "++show t2++")"
     show (ParenthesesPrimType t) = "("++show t++")"
 
---data Kind = AstKind | FuncKind Kind Kind
---
---instance Show Kind where
---    show AstKind = "*"
---    show (FuncKind a b) = "("++show a++" -> "show b++")"
+data Kind = AstKind | FuncKind Kind Kind
+
+instance Show Kind where
+    show AstKind = "*"
+    show (FuncKind a b) = "("++show a++" -> "++show b++")"
 
 -- Literal
 

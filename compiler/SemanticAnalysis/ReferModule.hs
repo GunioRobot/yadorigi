@@ -29,16 +29,17 @@ type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],NameEnv String,NameE
 -- refer module
 
 referModule :: [Module] ->
-    Either ImportError [(ModuleName,[NameInfo NameWithModule],[TypeNameInfo NameWithModule])]
-referModule modules = map (\(modname,_,_,_,(names,types)) -> (modname,names,types)) <$>
-    (mapM genModuleInfo modules>>=iterateToConvergeM referModuleIter)
+    Either ImportError [(Module,ModuleName,[NameInfo NameWithModule],[TypeNameInfo NameWithModule])]
+referModule modules =
+    zipWith (\mod (modname,_,_,_,(names,types)) -> (mod,modname,names,types)) modules <$>
+        (mapM genModuleInfo modules>>=iterateToConvergeM referModuleIter)
 
 genModuleInfo :: Module -> Either ImportError ModuleInfo
 genModuleInfo (Module modname exports imports body) = do
     insideNames <- return $ nub [((modname',name),modname) |
-        name <- concatMap declToName body,modname' <- [[],modname]]
+        name <- concatMap declToName body, modname' <- [[],modname]]
     insideTypes <- return $ nub [((modname',name),children,modname) |
-        (name,children) <- concatMap declToTypeName body,modname' <- [[],modname]]
+        (name,children) <- concatMap declToTypeName body, modname' <- [[],modname]]
     outsideNames <- filterByExportList modname exports insideNames
     outsideTypes <- typeFilterByExportList modname exports insideTypes
     return (modname,exports,imports,(outsideNames,outsideTypes),(insideNames,insideTypes))
@@ -88,7 +89,7 @@ filterByExportList modname exports names =
         filterByExport (ModuleExportEntity modname') =
             return $ [(name,smodname) | ((modname'',name),smodname) <- names, modname' == modname'']
         filterByExport (NameExportEntity (ScopedName modname' _ name) (Just [])) =
-            case nub [snd n | n <- names, elem modname' [fst $ fst n,[]] && name == snd (fst n)] of
+            case nub [snd n | n <- names, elem modname' [fst $ fst n,[]], name == snd (fst n)] of
                 [] -> return []
                 [smodname] -> return [(name,smodname)]
                 smodnames -> Left $ ExportConflict modname name smodnames

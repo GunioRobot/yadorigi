@@ -69,8 +69,8 @@ instance BindScope PrimExpr where
     bindScope (LambdaPrimExpr lambdas) = LambdaPrimExpr <$> bindScope lambdas
     bindScope (LetPrimExpr _ lets expr) = do
         scope <- getNextScope
-        let (lets',expr') = evalState (liftM2 (,) (bindScope lets) (bindScope expr)) 0
-        return $ LetPrimExpr scope lets' expr'
+        return $ evalState (liftM2 (LetPrimExpr scope)
+            (mapM (\(p,d) -> (,) p <$> bindScope d) lets) (bindScope expr)) 0
     bindScope (IfPrimExpr c t f) = liftM3 IfPrimExpr (bindScope c) (bindScope t) (bindScope f)
     bindScope (CasePrimExpr expr cases) = liftM2 CasePrimExpr (bindScope expr) (bindScope cases)
     bindScope (TypeSignaturePrimExpr expr typename) =
@@ -81,9 +81,6 @@ instance BindScope Lambda where
     bindScope (Lambda pos _ patterns expr) = do
         scope <- getNextScope
         return $ Lambda pos scope patterns (bindScope' expr)
-
-instance BindScope LetDecl where
-    bindScope (LetDecl pos decl) = LetDecl pos <$> bindScope decl
 
 instance BindScope CasePattern where
     bindScope (CasePattern _ pattern expr) = do

@@ -447,8 +447,8 @@ letParser layout = do
     expr <- exprParser 0 tlayout
     return $ LetPrimExpr 0 list expr
 
-letDeclParser :: LayoutInfo -> Parsec TokenStream u LetDecl
-letDeclParser layout = liftM2 LetDecl getPos
+letDeclParser :: LayoutInfo -> Parsec TokenStream u (Position,PrimDecl)
+letDeclParser layout = liftM2 (,) getPos
     (layoutChoice [fixityDeclParser,typeSignatureParser,simpleBindDeclParser] layout)
 
 ifParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
@@ -544,8 +544,10 @@ asPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 asPatternParser layout = do
     let tlayout = tailElemLayout layout
     var <- unscopedvNameParser layout
-    option (BindPrimPattern var Nothing)
-        (BindPrimPattern var <$> Just <$> (reservedToken "@" tlayout >> patternParser 4 tlayout))
+    if var == "_"
+        then return PrimWildCardPattern
+        else option (BindPrimPattern var Nothing) $
+            BindPrimPattern var <$> Just <$> (reservedToken "@" tlayout >> patternParser 4 tlayout)
 
 singleDCPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 singleDCPatternParser layout = flip DCPrimPattern [] <$> cNameParser layout

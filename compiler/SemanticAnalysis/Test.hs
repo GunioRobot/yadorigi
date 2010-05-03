@@ -6,10 +6,13 @@ import Yadorigi.Parser.Parser
 import Yadorigi.Parser.Tokenizer
 import Yadorigi.SemanticAnalysis.BindScope
 import Yadorigi.SemanticAnalysis.ReferModule
+import Yadorigi.SemanticAnalysis.NameResolution
 
 import Text.Parsec
 import Data.Functor
 import Data.Maybe
+import Data.List
+import Data.Tuple.All
 import Control.Monad
 
 import System.Environment
@@ -22,18 +25,21 @@ parsing filename contents =
         (Right ts) -> runParser moduleParser () filename ts
         (Left error) -> Left error
 
-
 main :: IO ()
 main = do
     files <- getArgs
-    parsedData <- map (uncurry parsing) <$> zip files <$> mapM readFile files
-    let errors = catMaybes $ map (either Just (const Nothing)) parsedData
-        succs = catMaybes $ map (either (const Nothing) Just) parsedData
-        entities = referModule $ map bindScope' succs
-    putStrLn "Error :"
-    mapM_ print errors
-    putStrLn "Success :"
-    mapM_ print succs
-    putStrLn "Entities :"
-    either print (mapM_ (\(a,b,c) -> print a>>print b>>print c>>putStr "\n")) entities
+    parsedData <- sequence <$> map (uncurry parsing) <$> zip files <$> mapM readFile files
+    case parsedData of
+        (Right result) -> case referModule $ map bindScope' result of
+            (Right result) -> mapM_ (print.f) result
+            (Left error) -> print error
+        (Left error) -> print error
+
+f (mod,modname,names,types) =
+    let names' = [(modname,smodname,name) | ((modname,name),smodname) <- names]++
+            [(modname,smodname,name) | ((modname,_),children,smodname) <- types, name <- children]
+        gnames = [name | name <- names', sel1 name == []]
+        lnames = [(smodname,[],name) | (modname,smodname,name) <- names', null $ modname]
+        types' = [(modname,smodname,name) | ((modname,name),_,smodname) <- types] in
+            nameResolution' ((modname,[]),gnames,types',lnames) mod
 
