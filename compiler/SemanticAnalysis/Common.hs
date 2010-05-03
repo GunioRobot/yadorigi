@@ -2,8 +2,6 @@
 module Yadorigi.SemanticAnalysis.Common where
 
 import Data.List
-import Data.Tuple.All
-import Control.Arrow
 
 import Yadorigi.Syntax
 

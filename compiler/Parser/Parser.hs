@@ -5,11 +5,10 @@ import Yadorigi.Common
 import Yadorigi.Syntax
 import Yadorigi.Parser.DataTypes
 
-import Text.Parsec
+import Data.Char
 import Control.Applicative ((<$>),(<$),(<*),(*>),(<*>),(<**>))
 import Control.Monad
-import Data.Char
-import Data.Maybe
+import Text.Parsec
 
 -- Data Types
 

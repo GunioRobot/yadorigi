@@ -21,10 +21,10 @@ data Import = Import Position Bool ModuleName (Maybe ModuleName) (Maybe (Bool,[I
 
 instance Show Import where
     show (Import _ qualified modname alias Nothing) =
-        "import "++(if qualified then "qualified" else "")++showModuleName modname++
+        "import "++(if qualified then " qualified" else "")++showModuleName modname++
         (maybe "" ((" as "++).showModuleName) alias)
     show (Import _ qualified modname alias (Just (hiding,imports))) =
-        "import "++(if qualified then "qualified" else "")++showModuleName modname++
+        "import "++(if qualified then " qualified" else "")++showModuleName modname++
         (maybe "" ((" as "++).showModuleName) alias)++
         (if hiding then "hiding" else "")++" ("++intercalate "," (map show imports)++")"
 

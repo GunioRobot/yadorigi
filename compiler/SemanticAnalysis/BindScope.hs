@@ -2,8 +2,6 @@
 module Yadorigi.SemanticAnalysis.BindScope where
 
 import Data.Functor
-import Data.List
-import Control.Arrow
 import Control.Monad.State
 
 import Yadorigi.Syntax

@@ -1,16 +1,14 @@
 
-{-# LANGUAGE TupleSections #-}
-
 module Yadorigi.Parser.Tokenizer (tokenizer) where
 
 import Yadorigi.Syntax
 import Yadorigi.Parser.DataTypes
 
-import Text.Parsec
 import Data.Char
 import Data.Maybe
 import Data.Functor
 import Control.Monad
+import Text.Parsec
 
 -- Constant Values
 
@@ -95,11 +93,11 @@ nameOpTokenizer =
                then ReservedToken s else OpToken $ ScopedName ns [] s
 
 nameTokenizer :: Parsec String u (Bool,String)
-nameTokenizer = (True,) <$>
+nameTokenizer = (,) True <$>
     liftM2 (:) (letter <|> char '_') (many (alphaNum <|> oneOf "_\'"))
 
 opTokenizer :: Parsec String u (Bool,String)
-opTokenizer = (False,) <$> liftM2 (:) opc (many opc)
+opTokenizer = (,) False <$> liftM2 (:) opc (many opc)
     where opc = oneOf "!#$%&*+-./:<=>?@^|"
 
 namespaceTokenizer :: Parsec String u [String]

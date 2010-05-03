@@ -2,14 +2,10 @@
 module Yadorigi.SemanticAnalysis.NameResolution where
 
 import Data.Functor
-import Data.List
 import Data.Tuple.All
-import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.Reader.Class
-import System.IO.Unsafe
+--import System.IO.Unsafe
 
-import Yadorigi.Common
 import Yadorigi.Monad.Either
 import Yadorigi.Syntax
 import Yadorigi.SemanticAnalysis.Common
@@ -21,10 +17,10 @@ type GNameEnv = (ModuleName,ModuleName,String) -- Global Name Environment
 type LNameEnv = (ModuleName,[Int],String) -- Local Name Environment
 
 overwriteNameEnv :: Scope -> [LNameEnv] -> ModuleName -> [LNameEnv]
-overwriteNameEnv scope list names = foldl overwriteIter list names
+overwriteNameEnv (modname,scope) list names = foldl overwriteIter list names
     where
         overwriteIter :: [LNameEnv] -> String -> [LNameEnv]
-        overwriteIter list name = (fst scope,snd scope,name):filter ((name /=).sel3) list
+        overwriteIter list name = (modname,scope,name):filter ((name==).sel3) list
 
 typeNameResolution :: ScopedName ->
     ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) ScopedName

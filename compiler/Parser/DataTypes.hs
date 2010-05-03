@@ -2,6 +2,7 @@
 module Yadorigi.Parser.DataTypes where
 
 import Text.Parsec
+
 import Yadorigi.Syntax
 
 -- Token
@@ -19,3 +20,4 @@ data Token
     | OpToken ScopedName {- operator token -}
     | ReservedToken String {- reserved word token, reserved symbol token -}
         deriving (Eq,Show)
+

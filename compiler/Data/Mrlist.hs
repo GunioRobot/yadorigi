@@ -19,3 +19,4 @@ mrmap f g = mrfoldr ((:!).f) ((:!).g) (Mrempty,Mrempty)
 
 mrlistTolist :: Mrlist a a -> [a]
 mrlistTolist = mrfoldr (:) (:) ([],[])
+

@@ -1,6 +1,12 @@
 
 module Yadorigi.SemanticAnalysis.Test where
 
+import Data.Functor
+import Data.Tuple.All
+import Control.Monad
+import Text.Parsec
+
+import Yadorigi.Monad.Either
 import Yadorigi.Syntax
 import Yadorigi.Parser.Parser
 import Yadorigi.Parser.Tokenizer
@@ -8,22 +14,13 @@ import Yadorigi.SemanticAnalysis.BindScope
 import Yadorigi.SemanticAnalysis.ReferModule
 import Yadorigi.SemanticAnalysis.NameResolution
 
-import Text.Parsec
-import Data.Functor
-import Data.Maybe
-import Data.List
-import Data.Tuple.All
-import Control.Monad
-
 import System.Environment
 
 -- Tester
 
 parsing :: String -> String -> Either ParseError Module
 parsing filename contents =
-    case runParser tokenizer () filename contents of
-        (Right ts) -> runParser moduleParser () filename ts
-        (Left error) -> Left error
+    runParser tokenizer () filename contents >>= runParser moduleParser () filename
 
 main :: IO ()
 main = do

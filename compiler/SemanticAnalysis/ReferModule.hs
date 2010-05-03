@@ -5,7 +5,6 @@ import Data.Functor
 import Data.List
 import Data.Maybe
 import Data.Tuple.All
-import Control.Arrow
 
 import Yadorigi.Common
 import Yadorigi.Monad.Either
