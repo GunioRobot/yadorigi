@@ -20,7 +20,7 @@ overwriteNameEnv :: Scope -> [LNameEnv] -> ModuleName -> [LNameEnv]
 overwriteNameEnv (modname,scope) list names = foldl overwriteIter list names
     where
         overwriteIter :: [LNameEnv] -> String -> [LNameEnv]
-        overwriteIter list name = (modname,scope,name):filter ((name==).sel3) list
+        overwriteIter list name = (modname,scope,name):filter ((name/=).sel3) list
 
 typeNameResolution :: ScopedName ->
     ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) ScopedName
