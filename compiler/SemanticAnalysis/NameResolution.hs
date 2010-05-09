@@ -9,12 +9,24 @@ import Control.Monad.Reader
 import Yadorigi.Monad.Either
 import Yadorigi.Syntax
 import Yadorigi.SemanticAnalysis.Common
+import Yadorigi.SemanticAnalysis.ReferModule
 
 data NameResolutionError = NameResolutionError deriving Show
 
 type Scope = (ModuleName,[Int])
 type GNameEnv = (ModuleName,ModuleName,String) -- Global Name Environment
 type LNameEnv = (ModuleName,[Int],String) -- Local Name Environment
+
+nameResolutionModule ::
+    (Module,ModuleName,[NameInfo NameWithModule],[TypeNameInfo NameWithModule]) ->
+    Either NameResolutionError Module
+nameResolutionModule (mod,modname,names,types) =
+    let names' = [(modname,smodname,name) | ((modname,name),smodname) <- names]++
+            [(modname,smodname,name) | ((modname,_),children,smodname) <- types, name <- children]
+        gnames = [name | name <- names', sel1 name == []]
+        lnames = [(smodname,[],name) | (modname,smodname,name) <- names', null $ modname]
+        types' = [(modname,smodname,name) | ((modname,name),_,smodname) <- types] in
+            nameResolution' ((modname,[]),gnames,types',lnames) mod
 
 overwriteNameEnv :: Scope -> [LNameEnv] -> ModuleName -> [LNameEnv]
 overwriteNameEnv (modname,scope) list names = foldl overwriteIter list names
@@ -54,6 +66,9 @@ class NameResolution a where
         a -> ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) a
     nameResolution' :: (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) -> a -> Either NameResolutionError a
     nameResolution' st a = runReaderT (nameResolution a) st
+    nameResolutionT :: MonadTrans t =>
+        (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) -> a -> t (Either NameResolutionError) a
+    nameResolutionT st a = lift $ runReaderT (nameResolution a) st
 
 instance NameResolution a => NameResolution [a] where
     nameResolution = mapM nameResolution
@@ -91,7 +106,7 @@ instance NameResolution PrimDecl where
         let lnameEnv' = overwriteNameEnv scope lnameEnv
                 (lhsToIName lhs++concatMap declToName whereClause)
             newSt = (scope,tnameEnv,gnameEnv,lnameEnv')
-        lift $ liftM2 BindPrimDecl (nameResolution' newSt bind) (nameResolution' newSt whereClause)
+        liftM2 BindPrimDecl (nameResolutionT newSt bind) (nameResolutionT newSt whereClause)
     nameResolution decl = return decl
 
 instance NameResolution Bind where
@@ -129,8 +144,8 @@ instance NameResolution PrimExpr where
         let newScope = (modname,scope++[scopeNum])
             lnameEnv' = overwriteNameEnv newScope lnameEnv (concatMap (primDeclToName.snd) lets)
             newSt = (newScope,tnameEnv,gnameEnv,lnameEnv')
-        lift $ liftM2 (LetPrimExpr scopeNum)
-            (mapM (\(p,d) -> (,) p <$> nameResolution' newSt d) lets) (nameResolution' newSt expr)
+        liftM2 (LetPrimExpr scopeNum)
+            (mapM (\(p,d) -> (,) p <$> nameResolutionT newSt d) lets) (nameResolutionT newSt expr)
     nameResolution (IfPrimExpr cond expr1 expr2) =
         liftM3 IfPrimExpr (nameResolution cond) (nameResolution expr1) (nameResolution expr2)
     nameResolution (CasePrimExpr expr pats) =
@@ -145,8 +160,7 @@ instance NameResolution Lambda where
         let newScope = (modname,scope++[scopeNum])
             lnameEnv' = overwriteNameEnv newScope lnameEnv (concatMap patternToNames params)
             newSt = (newScope,tnameEnv,gnameEnv,lnameEnv')
-        lift $ liftM2 (Lambda pos scopeNum)
-            (nameResolution' newSt params) (nameResolution' newSt expr)
+        liftM2 (Lambda pos scopeNum) (nameResolutionT newSt params) (nameResolutionT newSt expr)
 
 instance NameResolution CasePattern where
     nameResolution (CasePattern scopeNum pat expr) = do
@@ -154,8 +168,7 @@ instance NameResolution CasePattern where
         let newScope = (modname,scope++[scopeNum])
             lnameEnv' = overwriteNameEnv newScope lnameEnv (patternToNames pat)
             newSt = (newScope,tnameEnv,gnameEnv,lnameEnv')
-        lift $ liftM2 (CasePattern scopeNum)
-            (nameResolution' newSt pat) (nameResolution' newSt expr)
+        liftM2 (CasePattern scopeNum) (nameResolutionT newSt pat) (nameResolutionT newSt expr)
 
 instance NameResolution PatternMatch where
     nameResolution (PatternMatch pos pat) = PatternMatch pos <$> nameResolution pat

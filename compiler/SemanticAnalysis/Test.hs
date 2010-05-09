@@ -28,15 +28,7 @@ main = do
     parsedData <- sequence <$> map (uncurry parsing) <$> zip files <$> mapM readFile files
     case parsedData of
         (Right result) -> case referModule $ map bindScope' result of
-            (Right result) -> mapM_ (print.f) result
+            (Right result) -> mapM_ (print.nameResolutionModule) result
             (Left error) -> print error
         (Left error) -> print error
-
-f (mod,modname,names,types) =
-    let names' = [(modname,smodname,name) | ((modname,name),smodname) <- names]++
-            [(modname,smodname,name) | ((modname,_),children,smodname) <- types, name <- children]
-        gnames = [name | name <- names', sel1 name == []]
-        lnames = [(smodname,[],name) | (modname,smodname,name) <- names', null $ modname]
-        types' = [(modname,smodname,name) | ((modname,name),_,smodname) <- types] in
-            nameResolution' ((modname,[]),gnames,types',lnames) mod
 
