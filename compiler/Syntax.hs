@@ -120,7 +120,7 @@ instance Show Expr where
 data PrimExpr
     = LiteralPrimExpr Literal {- literal expression -}
     | NamePrimExpr ScopedName {- name expression -}
-    | ApplyFunctionPrimExpr Expr Expr {- apply function expression -}
+    | ApplyPrimExpr Expr Expr {- apply function expression -}
     | InfixPrimExpr ScopedName Expr Expr {- infix expression -}
     | NegativePrimExpr Expr {- negative expression -}
     | ParenthesesPrimExpr Expr {- parentheses expression -}
@@ -134,7 +134,7 @@ data PrimExpr
 instance Show PrimExpr where
     show (LiteralPrimExpr literal) = show literal
     show (NamePrimExpr name) = show name
-    show (ApplyFunctionPrimExpr func param) = "("++show func++" "++show param++")"
+    show (ApplyPrimExpr func param) = "("++show func++" "++show param++")"
     show (InfixPrimExpr name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
     show (NegativePrimExpr expr) = "-"++show expr
     show (ParenthesesPrimExpr expr) = "("++show expr++")"
@@ -203,27 +203,31 @@ instance Show DataType where
     show (DataType _ t) = show t
 
 data PrimDataType
-    = VariablePrimType String {- variable type -}
+    = VarPrimType String {- variable type -}
     | ConstructorPrimType ScopedName {- constructor type -}
     | ReservedConstructorPrimType String {- reserved constructor type -}
-    | ComposedPrimType DataType DataType {- composed type -}
+    | ApplyPrimType DataType DataType {- composed type -}
     | ListPrimType DataType {- list type -}
     | FunctionPrimType DataType DataType {- function type -}
     | ParenthesesPrimType DataType {- parentheses type -}
 
 instance Show PrimDataType where
-    show (VariablePrimType str) = str
+    show (VarPrimType str) = str
     show (ConstructorPrimType name) = show name
     show (ReservedConstructorPrimType str) = str
-    show (ComposedPrimType cons param) = "("++show cons++" "++show param++")"
+    show (ApplyPrimType cons param) = "("++show cons++" "++show param++")"
     show (ListPrimType param) = "["++show param++"]"
     show (FunctionPrimType t1 t2) = "("++show t1++" -> "++show t2++")"
     show (ParenthesesPrimType t) = "("++show t++")"
 
-data Kind = AstKind | FuncKind Kind Kind
+data Kind
+    = AstKind
+    | VarKind Int String
+    | FuncKind Kind Kind
 
 instance Show Kind where
     show AstKind = "*"
+    show (VarKind n s) = "#"++show n++"#"++s
     show (FuncKind a b) = "("++show a++" -> "++show b++")"
 
 -- Literal

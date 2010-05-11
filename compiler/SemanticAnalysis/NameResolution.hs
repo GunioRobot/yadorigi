@@ -75,9 +75,8 @@ instance NameResolution a => NameResolution [a] where
 
 instance NameResolution Decl where
     nameResolution (Decl pos scopeNum decl) = do
-        ((modname,scope),tnameEnv,gnameEnv,lnameEnv) <- ask
-        lift $ Decl pos scopeNum <$>
-            nameResolution' ((modname,scope++[scopeNum]),tnameEnv,gnameEnv,lnameEnv) decl
+        env@((modname,scope),_,_,_) <- ask
+        Decl pos scopeNum <$> nameResolutionT (upd1 (modname,scope++[scopeNum]) env) decl
 
 instance NameResolution Module where
     nameResolution (Module modname exports imports decls) =
@@ -131,8 +130,8 @@ instance NameResolution Expr where
 instance NameResolution PrimExpr where
     --nameResolution expr@(LiteralPrimExpr literal) = return expr
     nameResolution (NamePrimExpr name) = NamePrimExpr <$> varNameResolution name
-    nameResolution (ApplyFunctionPrimExpr func param) =
-        liftM2 ApplyFunctionPrimExpr (nameResolution func) (nameResolution param)
+    nameResolution (ApplyPrimExpr func param) =
+        liftM2 ApplyPrimExpr (nameResolution func) (nameResolution param)
     nameResolution (InfixPrimExpr op expr1 expr2) =
         liftM3 InfixPrimExpr (varNameResolution op) (nameResolution expr1) (nameResolution expr2)
     nameResolution (NegativePrimExpr expr) = NegativePrimExpr <$> nameResolution expr
@@ -205,8 +204,8 @@ instance NameResolution PrimDataType where
     --nameResolution typename@(VariablePrimType str) = return typename
     nameResolution (ConstructorPrimType cons) = ConstructorPrimType <$> typeNameResolution cons
     --nameResolution typename(ReservedConstructorPrimType str) = return typename
-    nameResolution (ComposedPrimType typename1 typename2) =
-        liftM2 ComposedPrimType (nameResolution typename1) (nameResolution typename2)
+    nameResolution (ApplyPrimType typename1 typename2) =
+        liftM2 ApplyPrimType (nameResolution typename1) (nameResolution typename2)
     nameResolution (ListPrimType typename) = ListPrimType <$> nameResolution typename
     nameResolution (FunctionPrimType typename1 typename2) =
         liftM2 FunctionPrimType (nameResolution typename1) (nameResolution typename2)

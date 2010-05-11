@@ -476,7 +476,7 @@ applyParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 applyParser layout = do
     let tlayout = tailElemLayout layout
     head <- exprParser 6 layout
-    option (primExpr head) $ ApplyFunctionPrimExpr head <$> exprParser 5 tlayout
+    option (primExpr head) $ ApplyPrimExpr head <$> exprParser 5 tlayout
 
 nameExprParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 nameExprParser layout = NamePrimExpr <$> nameParser layout
@@ -598,7 +598,7 @@ composedTypeParser layout = do
     pos <- getPos
     head <- typeParser 2 layout
     tail <- many $ typeParser 2 tlayout
-    return $ primDataType $ foldl (((.).(.)) (DataType pos) ComposedPrimType) head tail
+    return $ primDataType $ foldl (((.).(.)) (DataType pos) ApplyPrimType) head tail
 
 listTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 listTypeParser layout = do
@@ -621,5 +621,5 @@ constructorTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 constructorTypeParser layout = ConstructorPrimType <$> (cNameParser layout)
 
 variableTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
-variableTypeParser layout = VariablePrimType <$> (unscopedvNameParser layout)
+variableTypeParser layout = VarPrimType <$> (unscopedvNameParser layout)
 

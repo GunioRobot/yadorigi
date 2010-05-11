@@ -57,8 +57,7 @@ instance BindScope Expr where
     bindScope (Expr pos expr) = Expr pos <$> bindScope expr
 
 instance BindScope PrimExpr where
-    bindScope (ApplyFunctionPrimExpr expr1 expr2) =
-        liftM2 ApplyFunctionPrimExpr (bindScope expr1) (bindScope expr2)
+    bindScope (ApplyPrimExpr expr1 expr2) = liftM2 ApplyPrimExpr (bindScope expr1) (bindScope expr2)
     bindScope (InfixPrimExpr op expr1 expr2) =
         liftM2 (InfixPrimExpr op) (bindScope expr1) (bindScope expr2)
     bindScope (NegativePrimExpr expr) = NegativePrimExpr <$> bindScope expr
