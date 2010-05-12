@@ -36,11 +36,12 @@ patternToNames (PatternMatch _ pat) = primPatternToNames pat
 
 primPatternToNames :: PrimPatternMatch -> [String]
 primPatternToNames (DCPrimPattern _ pats) = concatMap patternToNames pats
-primPatternToNames (LiteralPrimPattern _) = []
+--primPatternToNames (LiteralPrimPattern _) = []
 primPatternToNames (DCOpPrimPattern _ pat1 pat2) = patternToNames pat1++patternToNames pat2
 primPatternToNames (NegativePrimPattern pat) = patternToNames pat
 primPatternToNames (ListPrimPattern pats) = concatMap patternToNames pats
 primPatternToNames (BindPrimPattern str pat) = str:maybe [] patternToNames pat
 primPatternToNames (ParenthesesPrimPattern pat) = patternToNames pat
 primPatternToNames (PrimPatternWithType pat _) = patternToNames pat
-
+--primPatternToNames PrimWildCardPattern = []
+primPatternToNames _ = []

@@ -4,6 +4,7 @@ module Yadorigi.Parser.Parser where
 import Yadorigi.Common
 import Yadorigi.Syntax
 import Yadorigi.Parser.DataTypes
+import Yadorigi.Data.Function.Compose
 
 import Data.Char
 import Control.Applicative ((<$>),(<$),(<*),(*>),(<*>),(<**>))
@@ -475,8 +476,9 @@ caseParser layout = do
 applyParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 applyParser layout = do
     let tlayout = tailElemLayout layout
-    head <- exprParser 6 layout
-    option (primExpr head) $ ApplyPrimExpr head <$> exprParser 5 tlayout
+    pos <- getPos
+    liftM2 (primExpr `oo` foldl (Expr pos `oo` ApplyPrimExpr))
+        (exprParser 6 layout) (many (exprParser 6 tlayout))
 
 nameExprParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 nameExprParser layout = NamePrimExpr <$> nameParser layout
@@ -574,52 +576,41 @@ contextParser layout = let tlayout = tailElemLayout layout in
               liftM3 TypeContext getPos (cNameParser layout) (typeParser 0 tlayout)
 
 typeParser :: Int -> LayoutInfo -> Parsec TokenStream u DataType
-typeParser n layout = liftM2 DataType getPos (primTypeParser n layout)
-
-primTypeParser :: Int -> LayoutInfo -> Parsec TokenStream u PrimDataType
-primTypeParser 0 = functionTypeParser
-primTypeParser 1 = layoutChoice [composedTypeParser,primTypeParser 2]
-primTypeParser 2 = layoutChoice
+typeParser 0 = functionTypeParser
+typeParser 1 = layoutChoice [applyTypeParser,typeParser 2]
+typeParser 2 = layoutChoice
     [listTypeParser,parenthesesTypeParser,constructorTypeParser,variableTypeParser]
 
-primDataType :: DataType -> PrimDataType
-primDataType (DataType _ dataType) = dataType
-
-functionTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+functionTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 functionTypeParser layout = do
     let tlayout = tailElemLayout layout
     f <- typeParser 1 layout
-    option (primDataType f) $ FunctionPrimType f <$>
-        (reservedToken "->" tlayout >> typeParser 0 layout)
+    option f $ FunctionType f <$> (reservedToken "->" tlayout >> typeParser 0 layout)
 
-composedTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
-composedTypeParser layout = do
-    let tlayout = tailElemLayout layout
-    pos <- getPos
-    head <- typeParser 2 layout
-    tail <- many $ typeParser 2 tlayout
-    return $ primDataType $ foldl (((.).(.)) (DataType pos) ApplyPrimType) head tail
+applyTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+applyTypeParser layout = let tlayout = tailElemLayout layout in
+    liftM2 (foldl ApplyType) (typeParser 2 layout) (many (typeParser 2 tlayout))
 
-listTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+listTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 listTypeParser layout = do
     let tlayout = tailElemLayout layout
     reservedToken "[" layout
-    result <- option (ReservedConstructorPrimType "[]") (ListPrimType <$> typeParser 0 tlayout)
+    result <- option (ReservedConstructorType "[]") (ListType <$> typeParser 0 tlayout)
     reservedToken "]" tlayout
     return result
 
-parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 parenthesesTypeParser layout = do
     let tlayout = tailElemLayout layout
     reservedToken "(" layout
-    result <- (ParenthesesPrimType <$> typeParser 0 tlayout) <|>
-        (reservedToken "->" tlayout >> return (ReservedConstructorPrimType "->"))
+    result <- (ParenthesesType <$> typeParser 0 tlayout) <|>
+        (reservedToken "->" tlayout >> return (ReservedConstructorType "->"))
     reservedToken ")" tlayout
     return result
 
-constructorTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
-constructorTypeParser layout = ConstructorPrimType <$> (cNameParser layout)
+constructorTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+constructorTypeParser layout = ConstructorType <$> cNameParser layout
 
-variableTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
-variableTypeParser layout = VarPrimType <$> (unscopedvNameParser layout)
+variableTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+variableTypeParser layout = VarType <$> unscopedvNameParser layout
 

@@ -197,28 +197,23 @@ data TypeContext = TypeContext Position ScopedName DataType
 instance Show TypeContext where
     show (TypeContext _ typeClass typeName) = show typeClass++" "++show typeName
 
-data DataType = DataType Position PrimDataType
+data DataType
+    = VarType String {- variable type -}
+    | ConstructorType ScopedName {- constructor type -}
+    | ReservedConstructorType String {- reserved constructor type -}
+    | ApplyType DataType DataType {- composed type -}
+    | ListType DataType {- list type -}
+    | FunctionType DataType DataType {- function type -}
+    | ParenthesesType DataType {- parentheses type -}
 
 instance Show DataType where
-    show (DataType _ t) = show t
-
-data PrimDataType
-    = VarPrimType String {- variable type -}
-    | ConstructorPrimType ScopedName {- constructor type -}
-    | ReservedConstructorPrimType String {- reserved constructor type -}
-    | ApplyPrimType DataType DataType {- composed type -}
-    | ListPrimType DataType {- list type -}
-    | FunctionPrimType DataType DataType {- function type -}
-    | ParenthesesPrimType DataType {- parentheses type -}
-
-instance Show PrimDataType where
-    show (VarPrimType str) = str
-    show (ConstructorPrimType name) = show name
-    show (ReservedConstructorPrimType str) = str
-    show (ApplyPrimType cons param) = "("++show cons++" "++show param++")"
-    show (ListPrimType param) = "["++show param++"]"
-    show (FunctionPrimType t1 t2) = "("++show t1++" -> "++show t2++")"
-    show (ParenthesesPrimType t) = "("++show t++")"
+    show (VarType str) = str
+    show (ConstructorType name) = show name
+    show (ReservedConstructorType str) = str
+    show (ApplyType cons param) = "("++show cons++" "++show param++")"
+    show (ListType param) = "["++show param++"]"
+    show (FunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
+    show (ParenthesesType t) = "("++show t++")"
 
 data Kind
     = AstKind

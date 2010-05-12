@@ -198,17 +198,14 @@ instance NameResolution TypeContext where
         liftM2 (TypeContext pos) (typeNameResolution name) (nameResolution typename)
 
 instance NameResolution DataType where
-    nameResolution (DataType pos typename) = DataType pos <$> nameResolution typename
-
-instance NameResolution PrimDataType where
-    --nameResolution typename@(VariablePrimType str) = return typename
-    nameResolution (ConstructorPrimType cons) = ConstructorPrimType <$> typeNameResolution cons
-    --nameResolution typename(ReservedConstructorPrimType str) = return typename
-    nameResolution (ApplyPrimType typename1 typename2) =
-        liftM2 ApplyPrimType (nameResolution typename1) (nameResolution typename2)
-    nameResolution (ListPrimType typename) = ListPrimType <$> nameResolution typename
-    nameResolution (FunctionPrimType typename1 typename2) =
-        liftM2 FunctionPrimType (nameResolution typename1) (nameResolution typename2)
-    nameResolution (ParenthesesPrimType typename) = ParenthesesPrimType <$> nameResolution typename
+    --nameResolution typename@(VarType str) = return typename
+    nameResolution (ConstructorType cons) = ConstructorType <$> typeNameResolution cons
+    --nameResolution typename(ReservedConstructorType str) = return typename
+    nameResolution (ApplyType typename1 typename2) =
+        liftM2 ApplyType (nameResolution typename1) (nameResolution typename2)
+    nameResolution (ListType typename) = ListType <$> nameResolution typename
+    nameResolution (FunctionType typename1 typename2) =
+        liftM2 FunctionType (nameResolution typename1) (nameResolution typename2)
+    nameResolution (ParenthesesType typename) = ParenthesesType <$> nameResolution typename
     nameResolution typename = return typename
 
