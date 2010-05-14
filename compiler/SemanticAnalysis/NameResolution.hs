@@ -198,6 +198,9 @@ instance NameResolution TypeContext where
         liftM2 (TypeContext pos) (typeNameResolution name) (nameResolution typename)
 
 instance NameResolution DataType where
+    nameResolution (DataType kind typename) = DataType kind <$> nameResolution typename
+
+instance NameResolution PrimDataType where
     --nameResolution typename@(VarType str) = return typename
     nameResolution (ConstructorType cons) = ConstructorType <$> typeNameResolution cons
     --nameResolution typename(ReservedConstructorType str) = return typename

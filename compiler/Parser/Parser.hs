@@ -197,6 +197,13 @@ offsideRuleMany parser layout = (getPosWithTest layout >>= many.parser.Right .sn
 offsideRuleMany1 :: (LayoutInfo -> Parsec [s] u a) -> LayoutInfo -> Parsec [s] u [a]
 offsideRuleMany1 parser layout = getPosWithTest layout >>= many1.parser.Right .snd
 
+layoutMany :: (LayoutInfo -> Parsec [s] u a) -> LayoutInfo -> Parsec [s] u [a]
+layoutMany parser layout =
+    liftM2 (:) (parser layout) (many (parser (tailElemLayout layout))) <|> return []
+
+layoutMany1 :: (LayoutInfo -> Parsec [s] u a) -> LayoutInfo -> Parsec [s] u [a]
+layoutMany1 parser layout = liftM2 (:) (parser layout) (many (parser (tailElemLayout layout)))
+
 layoutParentheses :: (LayoutInfo -> Parsec TokenStream u a) -> LayoutInfo -> Parsec TokenStream u a
 layoutParentheses parser layout = let tlayout = tailElemLayout layout in
     between (reservedToken "(" layout) (reservedToken ")" tlayout) (parser tlayout)
@@ -576,41 +583,38 @@ contextParser layout = let tlayout = tailElemLayout layout in
               liftM3 TypeContext getPos (cNameParser layout) (typeParser 0 tlayout)
 
 typeParser :: Int -> LayoutInfo -> Parsec TokenStream u DataType
-typeParser 0 = functionTypeParser
-typeParser 1 = layoutChoice [applyTypeParser,typeParser 2]
-typeParser 2 = layoutChoice
+typeParser n layout = DataType undefined <$> primTypeParser n layout
+
+primTypeParser :: Int -> LayoutInfo -> Parsec TokenStream u PrimDataType
+primTypeParser 0 = functionTypeParser
+primTypeParser 1 = layoutChoice [applyTypeParser,primTypeParser 2]
+primTypeParser 2 = layoutChoice
     [listTypeParser,parenthesesTypeParser,constructorTypeParser,variableTypeParser]
 
-functionTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+primType :: DataType -> PrimDataType
+primType (DataType _ typename) = typename
+
+functionTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 functionTypeParser layout = do
     let tlayout = tailElemLayout layout
     f <- typeParser 1 layout
-    option f $ FunctionType f <$> (reservedToken "->" tlayout >> typeParser 0 layout)
+    option (primType f) $ FunctionType f <$> (reservedToken "->" tlayout >> typeParser 0 layout)
 
-applyTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-applyTypeParser layout = let tlayout = tailElemLayout layout in
-    liftM2 (foldl ApplyType) (typeParser 2 layout) (many (typeParser 2 tlayout))
+applyTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+applyTypeParser layout =
+    primType <$> foldl1 (DataType undefined `oo` ApplyType) <$> layoutMany1 (typeParser 2) layout
 
-listTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-listTypeParser layout = do
-    let tlayout = tailElemLayout layout
-    reservedToken "[" layout
-    result <- option (ReservedConstructorType "[]") (ListType <$> typeParser 0 tlayout)
-    reservedToken "]" tlayout
-    return result
+listTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+listTypeParser =
+    layoutBracket (\l -> option (ReservedConstructorType "[]") (ListType <$> typeParser 0 l))
 
-parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-parenthesesTypeParser layout = do
-    let tlayout = tailElemLayout layout
-    reservedToken "(" layout
-    result <- (ParenthesesType <$> typeParser 0 tlayout) <|>
-        (reservedToken "->" tlayout >> return (ReservedConstructorType "->"))
-    reservedToken ")" tlayout
-    return result
+parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+parenthesesTypeParser = layoutParentheses (\l -> (ParenthesesType <$> typeParser 0 l) <|>
+    (reservedToken "->" l >> return (ReservedConstructorType "->")))
 
-constructorTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+constructorTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 constructorTypeParser layout = ConstructorType <$> cNameParser layout
 
-variableTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+variableTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 variableTypeParser layout = VarType <$> unscopedvNameParser layout
 

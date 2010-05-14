@@ -197,7 +197,12 @@ data TypeContext = TypeContext Position ScopedName DataType
 instance Show TypeContext where
     show (TypeContext _ typeClass typeName) = show typeClass++" "++show typeName
 
-data DataType
+data DataType = DataType Kind PrimDataType
+
+instance Show DataType where
+    show (DataType _ typename) = show typename
+
+data PrimDataType
     = VarType String {- variable type -}
     | ConstructorType ScopedName {- constructor type -}
     | ReservedConstructorType String {- reserved constructor type -}
@@ -206,7 +211,7 @@ data DataType
     | FunctionType DataType DataType {- function type -}
     | ParenthesesType DataType {- parentheses type -}
 
-instance Show DataType where
+instance Show PrimDataType where
     show (VarType str) = str
     show (ConstructorType name) = show name
     show (ReservedConstructorType str) = str
@@ -217,13 +222,13 @@ instance Show DataType where
 
 data Kind
     = AstKind
-    | VarKind Int String
     | FuncKind Kind Kind
+    | VarKind Int String
 
 instance Show Kind where
     show AstKind = "*"
-    show (VarKind n s) = "#"++show n++"#"++s
     show (FuncKind a b) = "("++show a++" -> "++show b++")"
+    show (VarKind n s) = "#"++show n++"#"++s
 
 -- Literal
 
