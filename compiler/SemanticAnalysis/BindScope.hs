@@ -1,10 +1,11 @@
 
 module Yadorigi.SemanticAnalysis.BindScope where
 
+import Yadorigi.Syntax
+import Yadorigi.Monad.State
+
 import Data.Functor
 import Control.Monad.State
-
-import Yadorigi.Syntax
 
 -- Bind Scope Name
 
@@ -15,7 +16,7 @@ class BindScope t where
 
 
 getNextScope :: State Int Int
-getNextScope = get >>= \n -> put (n+1) >> return n
+getNextScope = fst <$> stateTrans (+1)
 
 
 instance BindScope t => BindScope [t] where

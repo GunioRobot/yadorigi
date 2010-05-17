@@ -5,8 +5,7 @@ import Data.List
 
 -- Module
 
-data Module
-    = Module ModuleName (Maybe [ExportEntity]) [Import] [Decl]
+data Module = Module ModuleName (Maybe [ExportEntity]) [Import] [Decl]
 
 instance Show Module where
     show (Module [] _ imports decls) =

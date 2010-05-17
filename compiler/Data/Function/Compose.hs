@@ -1,7 +1,7 @@
 
 module Yadorigi.Data.Function.Compose where
 
-oo :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
+oo :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 oo = (.).(.)
 
 ooo , (...) :: (d -> e) -> (a -> b -> c -> d) -> a -> b -> c -> e
