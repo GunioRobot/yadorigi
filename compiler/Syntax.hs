@@ -53,9 +53,9 @@ instance Show Decl where
     show (Decl _ scope decl) = "#"++show scope++"# "++show decl
 
 data PrimDecl
-    = DataPrimDecl [TypeContext] String [String] [(String,[DataType])]
-    | TypePrimDecl String [String] DataTypeWithContext
-    | ClassPrimDecl [TypeContext] String String [Decl]
+    = DataPrimDecl [TypeContext] String [(String,Int)] [(String,[DataType])]
+    | TypePrimDecl String [(String,Int)] DataTypeWithContext
+    | ClassPrimDecl [TypeContext] String (String,Int) [Decl]
     | InstancePrimDecl [TypeContext] ScopedName DataType [Decl]
     | FixityPrimDecl Fixity (Maybe Int) [String]
     | TypeSignaturePrimDecl String DataTypeWithContext
@@ -63,12 +63,12 @@ data PrimDecl
 
 instance Show PrimDecl where
     show (DataPrimDecl context str param body) =
-        "data "++showContext context++str++concatMap (' ':) param++" = "++
+        "data "++showContext context++str++concatMap ((' ':).fst) param++" = "++
         intercalate " | " (map (\(s,l) -> s++concatMap ((' ':).show) l) body)
     show (TypePrimDecl str param typeName) =
-        "type "++str++intercalate " " param++" = "++show typeName
+        "type "++str++intercalate " " (map fst param)++" = "++show typeName
     show (ClassPrimDecl context className typeName body) =
-        "class "++showContext context++className++" "++typeName++showWhereClause body
+        "class "++showContext context++className++" "++fst typeName++showWhereClause body
     show (InstancePrimDecl context className typeName body) =
         "instance "++showContext context++show className++" "++show typeName++showWhereClause body
     show (FixityPrimDecl fixity Nothing list) = show fixity++" "++show list
@@ -202,7 +202,7 @@ instance Show DataType where
     show (DataType _ typename) = show typename
 
 data PrimDataType
-    = VarType String {- variable type -}
+    = VarType String Int {- variable type -}
     | ConstructorType ScopedName {- constructor type -}
     | ReservedConstructorType String {- reserved constructor type -}
     | ApplyType DataType DataType {- composed type -}
@@ -211,7 +211,7 @@ data PrimDataType
     | ParenthesesType DataType {- parentheses type -}
 
 instance Show PrimDataType where
-    show (VarType str) = str
+    show (VarType str _) = str
     show (ConstructorType name) = show name
     show (ReservedConstructorType str) = str
     show (ApplyType cons param) = "("++show cons++" "++show param++")"

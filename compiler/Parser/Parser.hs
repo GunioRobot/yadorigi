@@ -293,7 +293,7 @@ dataDeclParser layout = do
     reservedToken "data" layout
     context <- contextParser tlayout
     typeName <- unscopedcNameToken tlayout
-    params <- many $ unscopedvNameToken tlayout
+    params <- many $ flip (,) undefined <$> unscopedvNameToken tlayout
     reservedToken "=" tlayout
     constructors <- sepBy1
         (liftM2 (,) (unscopedcNameToken tlayout) (many $ typeParser 2 tlayout))
@@ -305,7 +305,7 @@ typeDeclParser layout = do
     let tlayout = tailElemLayout layout
     reservedToken "type" layout
     typeName <- unscopedcNameToken tlayout
-    params <- many $ unscopedvNameToken tlayout
+    params <- many $ flip (,) undefined <$> unscopedvNameToken tlayout
     reservedToken "=" tlayout
     body <- typeWithContextParser tlayout
     return $ TypePrimDecl typeName params body
@@ -318,7 +318,7 @@ classDeclParser layout = do
     className <- unscopedcNameToken tlayout
     param <- unscopedvNameToken tlayout
     body <- option [] $ reservedToken "where" tlayout >> offsideRuleMany declParser tlayout
-    return $ ClassPrimDecl context className param body
+    return $ ClassPrimDecl context className (param,undefined) body
 
 instanceDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 instanceDeclParser layout = do
@@ -616,5 +616,5 @@ constructorTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 constructorTypeParser layout = ConstructorType <$> cNameParser layout
 
 variableTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
-variableTypeParser layout = VarType <$> unscopedvNameParser layout
+variableTypeParser layout = flip VarType undefined <$> unscopedvNameParser layout
 
