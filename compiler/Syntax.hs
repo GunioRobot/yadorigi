@@ -191,10 +191,10 @@ data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
 instance Show DataTypeWithContext where
     show (DataTypeWithContext _ context dataType) = show context++show dataType
 
-data TypeContext = TypeContext Position ScopedName DataType
+data TypeContext = TypeContext ScopedName String Int
 
 instance Show TypeContext where
-    show (TypeContext _ typeClass typeName) = show typeClass++" "++show typeName
+    show (TypeContext typeClass typeName _) = show typeClass++" "++typeName
 
 data DataType = DataType Kind PrimDataType
 

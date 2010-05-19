@@ -25,11 +25,11 @@ reservedSymbol = ["=","@","\\","->","=>","::","|",",","(",")","[","]","`"]
 -- Tokenizer
 
 getToken :: Parsec String u Token'
-getToken =
-    do pos <- getPosition
-       body <- literalTokenizer <|> nameOpTokenizer <|> reservedTokenizer <?> "valid token"
-       spacesAndComments
-       return $ Token' pos body
+getToken = do
+    pos <- getPosition
+    body <- literalTokenizer <|> nameOpTokenizer <|> reservedTokenizer <?> "valid token"
+    spacesAndComments
+    return $ Token' pos body
 
 tokenizer :: Parsec String u TokenStream
 tokenizer = between spacesAndComments eof (many getToken)
@@ -54,12 +54,12 @@ numLiteralTokenizer :: Parsec String u Literal
 numLiteralTokenizer = try (char '0' >> (octTokenizer <|> hexTokenizer)) <|> decTokenizer
 
 decTokenizer :: Parsec String u Literal
-decTokenizer =
-    do integer <- many1 digit
-       fractional <- option "" $ liftM2 (:) (char '.') (many1 digit)
-       return $ if null fractional
-           then LiteralInt $ read integer
-           else LiteralFloat $ read (integer++fractional)
+decTokenizer = do
+    integer <- many1 digit
+    fractional <- option "" $ liftM2 (:) (char '.') (many1 digit)
+    return $ if null fractional
+        then LiteralInt $ read integer
+        else LiteralFloat $ read (integer++fractional)
 
 octTokenizer :: Parsec String u Literal
 octTokenizer = (char 'o' <|> char 'O') >>
@@ -71,8 +71,9 @@ hexTokenizer = (char 'x' <|> char 'X') >>
 
 strElem :: Parsec String u Char
 strElem = noneOf "\\\"\'" <|> liftM2 (\bs -> conv.(`const` bs)) (char '\\') (oneOf "abfnrtv\\\"\'")
-    where conv c = fromMaybe c $ lookup c
-              [('a','\a'),('b','\b'),('f','\f'),('n','\n'),('r','\r'),('t','\t'),('v','\v')]
+    where
+        conv c = fromMaybe c $ lookup c
+            [('a','\a'),('b','\b'),('f','\f'),('n','\n'),('r','\r'),('t','\t'),('v','\v')]
 
 stringTokenizer :: Parsec String u Literal
 stringTokenizer = between (string "\"") (string "\"") $ LiteralString <$> many strElem
@@ -83,22 +84,23 @@ charTokenizer = between (string "\'") (string "\'") $ LiteralChar <$> strElem
 -- Name and Operators
 
 nameOpTokenizer :: Parsec String u Token
-nameOpTokenizer =
-    do ns <- namespaceTokenizer
-       t <- nameTokenizer <|> opTokenizer
-       return $ case t of
-           (True,s) -> if elem s reservedStr && null ns
-               then ReservedToken s else NameToken $ ScopedName ns [] s
-           (False,s) -> if elem s reservedStr && null ns
-               then ReservedToken s else OpToken $ ScopedName ns [] s
+nameOpTokenizer = do
+    ns <- namespaceTokenizer
+    t <- nameTokenizer <|> opTokenizer
+    return $ case t of
+        (True,s) -> if elem s reservedStr && null ns
+            then ReservedToken s
+            else NameToken $ ScopedName ns [] s
+        (False,s) -> if elem s reservedStr && null ns
+            then ReservedToken s
+            else OpToken $ ScopedName ns [] s
 
 nameTokenizer :: Parsec String u (Bool,String)
 nameTokenizer = (,) True <$>
     liftM2 (:) (letter <|> char '_') (many (alphaNum <|> oneOf "_\'"))
 
 opTokenizer :: Parsec String u (Bool,String)
-opTokenizer = (,) False <$> liftM2 (:) opc (many opc)
-    where opc = oneOf "!#$%&*+-./:<=>?@^|"
+opTokenizer = (,) False <$> liftM2 (:) opc (many opc) where opc = oneOf "!#$%&*+-./:<=>?@^|"
 
 namespaceTokenizer :: Parsec String u [String]
 namespaceTokenizer = many $ try $ liftM3 ((const.).(:))

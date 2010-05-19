@@ -194,8 +194,8 @@ instance NameResolution DataTypeWithContext where
         liftM2 (DataTypeWithContext pos) (nameResolution context) (nameResolution typename)
 
 instance NameResolution TypeContext where
-    nameResolution (TypeContext pos name typename) =
-        liftM2 (TypeContext pos) (typeNameResolution name) (nameResolution typename)
+    nameResolution (TypeContext cls instanceName instanceNum) =
+        liftM3 TypeContext (typeNameResolution cls) (return instanceName) (return instanceNum)
 
 instance NameResolution DataType where
     nameResolution (DataType kind typename) = DataType kind <$> nameResolution typename
