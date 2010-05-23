@@ -137,12 +137,12 @@ instance Show PrimExpr where
     show (InfixPrimExpr name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
     show (NegativePrimExpr expr) = "-"++show expr
     show (ParenthesesPrimExpr expr) = "("++show expr++")"
-    show (ListPrimExpr list) = show list
-    show (LambdaPrimExpr list) = "(\\"++intercalate " | " (map show list)++")"
-    show (LetPrimExpr scope list expr) =
-        "(let #"++show scope++"# "++show (map snd list)++" "++show expr++")"
+    show (ListPrimExpr expr) = show expr
+    show (LambdaPrimExpr lambda) = "(\\"++intercalate " | " (map show lambda)++")"
+    show (LetPrimExpr scope lets expr) =
+        "(let #"++show scope++"# "++show (map snd lets)++" "++show expr++")"
     show (IfPrimExpr c t f) = "(if "++show c++" "++show t++" "++show f++")"
-    show (CasePrimExpr expr list) = "(case "++show expr++" "++show list++")"
+    show (CasePrimExpr expr pat) = "(case "++show expr++" "++show pat++")"
     show (TypeSignaturePrimExpr expr dataType) = "("++show expr++"::"++show dataType++")"
 
 data Lambda = Lambda Position Int [PatternMatch] Expr
@@ -175,13 +175,14 @@ data PrimPatternMatch
     | PrimWildCardPattern {- wild card pattern -}
 
 instance Show PrimPatternMatch where
-    show (DCPrimPattern name list) = "("++show name++concatMap ((' ':).show) list++")"
+    show (DCPrimPattern name pat) = "("++show name++concatMap ((' ':).show) pat++")"
     show (LiteralPrimPattern literal) = show literal
     show (DCOpPrimPattern name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
-    show (ListPrimPattern list) = show list
-    show (BindPrimPattern str pattern) = "("++str++maybe "" (("@"++).show) pattern++")"
-    show (ParenthesesPrimPattern pattern) = "("++show pattern++")"
-    show (PrimPatternWithType pattern typeName) = "("++show pattern++show typeName++")"
+    show (NegativePrimPattern pat) = "-"++show pat
+    show (ListPrimPattern pat) = show pat
+    show (BindPrimPattern str pat) = "("++str++maybe "" (("@"++).show) pat++")"
+    show (ParenthesesPrimPattern pat) = "("++show pat++")"
+    show (PrimPatternWithType pat typename) = "("++show pat++show typename++")"
     show PrimWildCardPattern = "_"
 
 -- Data Type
@@ -189,12 +190,12 @@ instance Show PrimPatternMatch where
 data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
 
 instance Show DataTypeWithContext where
-    show (DataTypeWithContext _ context dataType) = show context++show dataType
+    show (DataTypeWithContext _ context typename) = show context++show typename
 
 data TypeContext = TypeContext ScopedName String Int
 
 instance Show TypeContext where
-    show (TypeContext typeClass typeName _) = show typeClass++" "++typeName
+    show (TypeContext typeclass typename _) = show typeclass++" "++typename
 
 data DataType = DataType Kind PrimDataType
 
