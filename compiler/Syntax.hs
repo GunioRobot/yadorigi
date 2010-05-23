@@ -53,29 +53,28 @@ instance Show Decl where
     show (Decl _ scope decl) = "#"++show scope++"# "++show decl
 
 data PrimDecl
-    = DataPrimDecl [TypeContext] String [(String,Int)] [(String,[DataType])]
-    | TypePrimDecl String [(String,Int)] DataTypeWithContext
-    | ClassPrimDecl [TypeContext] String (String,Int) [Decl]
-    | InstancePrimDecl [TypeContext] ScopedName DataType [Decl]
-    | FixityPrimDecl Fixity (Maybe Int) [String]
-    | TypeSignaturePrimDecl String DataTypeWithContext
-    | BindPrimDecl Bind [Decl]
+    = DataDecl [TypeContext] String [(String,Int)] [(String,[DataType])]
+    | TypeDecl String [(String,Int)] DataTypeWithContext
+    | ClassDecl [TypeContext] String (String,Int) [Decl]
+    | InstanceDecl [TypeContext] ScopedName DataType [Decl]
+    | FixityDecl Fixity (Maybe Int) [String]
+    | TypeSignatureDecl String DataTypeWithContext
+    | BindDecl Bind [Decl]
 
 instance Show PrimDecl where
-    show (DataPrimDecl context str param body) =
+    show (DataDecl context str param body) =
         "data "++showContext context++str++concatMap ((' ':).fst) param++" = "++
         intercalate " | " (map (\(s,l) -> s++concatMap ((' ':).show) l) body)
-    show (TypePrimDecl str param typeName) =
+    show (TypeDecl str param typeName) =
         "type "++str++intercalate " " (map fst param)++" = "++show typeName
-    show (ClassPrimDecl context className typeName body) =
+    show (ClassDecl context className typeName body) =
         "class "++showContext context++className++" "++fst typeName++showWhereClause body
-    show (InstancePrimDecl context className typeName body) =
+    show (InstanceDecl context className typeName body) =
         "instance "++showContext context++show className++" "++show typeName++showWhereClause body
-    show (FixityPrimDecl fixity Nothing list) = show fixity++" "++show list
-    show (FixityPrimDecl fixity (Just num) list) =
-        show fixity++" "++show num++" "++intercalate " " list
-    show (TypeSignaturePrimDecl str typeName) = str++" :: "++show typeName
-    show (BindPrimDecl bind whereClause) = show bind++showWhereClause whereClause
+    show (FixityDecl fixity Nothing list) = show fixity++" "++show list
+    show (FixityDecl fixity (Just num) list) = show fixity++" "++show num++" "++intercalate " " list
+    show (TypeSignatureDecl str typeName) = str++" :: "++show typeName
+    show (BindDecl bind whereClause) = show bind++showWhereClause whereClause
 
 data Fixity = Infixl | Infix | Infixr deriving Show
 
@@ -117,33 +116,33 @@ instance Show Expr where
     show (Expr _ primExpr) = show primExpr
 
 data PrimExpr
-    = LiteralPrimExpr Literal {- literal expression -}
-    | NamePrimExpr ScopedName {- name expression -}
-    | ApplyPrimExpr Expr Expr {- apply function expression -}
-    | InfixPrimExpr ScopedName Expr Expr {- infix expression -}
-    | NegativePrimExpr Expr {- negative expression -}
-    | ParenthesesPrimExpr Expr {- parentheses expression -}
-    | ListPrimExpr [Expr] {- list expression -}
-    | LambdaPrimExpr [Lambda] {- lambda expression -}
-    | LetPrimExpr Int [(Position,PrimDecl)] Expr {- let expression -}
-    | IfPrimExpr Expr Expr Expr {- if expression -}
-    | CasePrimExpr Expr [CasePattern] {- case Expression -}
-    | TypeSignaturePrimExpr Expr DataTypeWithContext {- expression with data type information -}
+    = LiteralExpr Literal {- literal expression -}
+    | NameExpr ScopedName {- name expression -}
+    | ApplyExpr Expr Expr {- apply function expression -}
+    | InfixExpr ScopedName Expr Expr {- infix expression -}
+    | NegativeExpr Expr {- negative expression -}
+    | ParenthesesExpr Expr {- parentheses expression -}
+    | ListExpr [Expr] {- list expression -}
+    | LambdaExpr [Lambda] {- lambda expression -}
+    | LetExpr Int [(Position,PrimDecl)] Expr {- let expression -}
+    | IfExpr Expr Expr Expr {- if expression -}
+    | CaseExpr Expr [CasePattern] {- case Expression -}
+    | TypeSignatureExpr Expr DataTypeWithContext {- expression with data type information -}
 
 instance Show PrimExpr where
-    show (LiteralPrimExpr literal) = show literal
-    show (NamePrimExpr name) = show name
-    show (ApplyPrimExpr func param) = "("++show func++" "++show param++")"
-    show (InfixPrimExpr name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
-    show (NegativePrimExpr expr) = "-"++show expr
-    show (ParenthesesPrimExpr expr) = "("++show expr++")"
-    show (ListPrimExpr expr) = show expr
-    show (LambdaPrimExpr lambda) = "(\\"++intercalate " | " (map show lambda)++")"
-    show (LetPrimExpr scope lets expr) =
+    show (LiteralExpr literal) = show literal
+    show (NameExpr name) = show name
+    show (ApplyExpr func param) = "("++show func++" "++show param++")"
+    show (InfixExpr name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
+    show (NegativeExpr expr) = "-"++show expr
+    show (ParenthesesExpr expr) = "("++show expr++")"
+    show (ListExpr expr) = show expr
+    show (LambdaExpr lambda) = "(\\"++intercalate " | " (map show lambda)++")"
+    show (LetExpr scope lets expr) =
         "(let #"++show scope++"# "++show (map snd lets)++" "++show expr++")"
-    show (IfPrimExpr c t f) = "(if "++show c++" "++show t++" "++show f++")"
-    show (CasePrimExpr expr pat) = "(case "++show expr++" "++show pat++")"
-    show (TypeSignaturePrimExpr expr dataType) = "("++show expr++"::"++show dataType++")"
+    show (IfExpr c t f) = "(if "++show c++" "++show t++" "++show f++")"
+    show (CaseExpr expr pat) = "(case "++show expr++" "++show pat++")"
+    show (TypeSignatureExpr expr dataType) = "("++show expr++"::"++show dataType++")"
 
 data Lambda = Lambda Position Int [PatternMatch] Expr
 
@@ -164,26 +163,26 @@ instance Show PatternMatch where
     show (PatternMatch _ pattern) = show pattern
 
 data PrimPatternMatch
-    = DCPrimPattern ScopedName [PatternMatch] {- data constructor pattern -}
-    | LiteralPrimPattern Literal {- literal pattern -}
-    | DCOpPrimPattern ScopedName PatternMatch PatternMatch {- infix data constructor pattern -}
-    | NegativePrimPattern PatternMatch {- negative pattern -}
-    | ListPrimPattern [PatternMatch] {- list pattern -}
-    | BindPrimPattern String (Maybe PatternMatch) {- bind pattern, as pattern -}
-    | ParenthesesPrimPattern PatternMatch {- Parentheses Pattern -}
-    | PrimPatternWithType PatternMatch DataTypeWithContext {- pattern with data type information -}
-    | PrimWildCardPattern {- wild card pattern -}
+    = DCPattern ScopedName [PatternMatch] {- data constructor pattern -}
+    | LiteralPattern Literal {- literal pattern -}
+    | DCOpPattern ScopedName PatternMatch PatternMatch {- infix data constructor pattern -}
+    | NegativePattern PatternMatch {- negative pattern -}
+    | ListPattern [PatternMatch] {- list pattern -}
+    | BindPattern String (Maybe PatternMatch) {- bind pattern, as pattern -}
+    | ParenthesesPattern PatternMatch {- Parentheses Pattern -}
+    | PatternWithType PatternMatch DataTypeWithContext {- pattern with data type information -}
+    | WildCardPattern {- wild card pattern -}
 
 instance Show PrimPatternMatch where
-    show (DCPrimPattern name pat) = "("++show name++concatMap ((' ':).show) pat++")"
-    show (LiteralPrimPattern literal) = show literal
-    show (DCOpPrimPattern name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
-    show (NegativePrimPattern pat) = "-"++show pat
-    show (ListPrimPattern pat) = show pat
-    show (BindPrimPattern str pat) = "("++str++maybe "" (("@"++).show) pat++")"
-    show (ParenthesesPrimPattern pat) = "("++show pat++")"
-    show (PrimPatternWithType pat typename) = "("++show pat++show typename++")"
-    show PrimWildCardPattern = "_"
+    show (DCPattern name pat) = "("++show name++concatMap ((' ':).show) pat++")"
+    show (LiteralPattern literal) = show literal
+    show (DCOpPattern name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
+    show (NegativePattern pat) = "-"++show pat
+    show (ListPattern pat) = show pat
+    show (BindPattern str pat) = "("++str++maybe "" (("@"++).show) pat++")"
+    show (ParenthesesPattern pat) = "("++show pat++")"
+    show (PatternWithType pat typename) = "("++show pat++show typename++")"
+    show WildCardPattern = "_"
 
 -- Data Type
 

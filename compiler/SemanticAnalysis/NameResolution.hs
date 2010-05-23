@@ -1,10 +1,13 @@
 
+{-# LANGUAGE FlexibleInstances #-}
+
 module Yadorigi.SemanticAnalysis.NameResolution where
 
+import Prelude hiding (mapM, sequence)
 import Data.Functor
+import Data.Traversable
 import Data.Tuple.All
-import Control.Monad.Reader
---import System.IO.Unsafe
+import Control.Monad.Reader hiding (mapM, sequence)
 
 import Yadorigi.Monad.Either
 import Yadorigi.Syntax
@@ -38,9 +41,6 @@ typeNameResolution :: ScopedName ->
     ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) ScopedName
 typeNameResolution (ScopedName modname _ name) = do
     (_,tnameEnv,_,_) <- ask
-    --let !_ = unsafePerformIO $ do
-    --        putStrLn $ (modname>>=(++"."))++name
-    --        putStrLn "tnameEnv : " >> print tnameEnv
     case [n | n <- tnameEnv, modname == sel1 n, name == sel3 n] of
         [n] -> return $ ScopedName (sel2 n) [] name
         _ -> lift $ Left NameResolutionError
@@ -49,10 +49,6 @@ varNameResolution :: ScopedName ->
     ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) ScopedName
 varNameResolution (ScopedName modname _ name) = do
     (_,_,gnameEnv,lnameEnv) <- ask
-    --let !_ = unsafePerformIO $ do
-    --        putStrLn $ (modname>>=(++"."))++name
-    --        putStrLn "gnameEnv : " >> print gnameEnv
-    --        putStrLn "lnameEnv : " >> print lnameEnv
     let lsearch = case [n | n <- lnameEnv, name == sel3 n] of
             [(modname',scope,_)] -> return $ ScopedName modname' scope name
             _ -> Left NameResolutionError
@@ -70,7 +66,7 @@ class NameResolution a where
         (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) -> a -> t (Either NameResolutionError) a
     nameResolutionT st a = lift $ runReaderT (nameResolution a) st
 
-instance NameResolution a => NameResolution [a] where
+instance (Traversable f,NameResolution a) => NameResolution (f a) where
     nameResolution = mapM nameResolution
 
 instance NameResolution Decl where
@@ -83,29 +79,28 @@ instance NameResolution Module where
         Module modname exports imports <$> nameResolution decls
 
 instance NameResolution PrimDecl where
-    nameResolution (DataPrimDecl context name param body) = do
+    nameResolution (DataDecl context name param body) = do
         context' <- nameResolution context
         body' <- mapM (\(c,p) -> nameResolution p >>= \p' -> return (c,p')) body
-        return $ DataPrimDecl context' name param body'
-    nameResolution (TypePrimDecl name param typeName) =
-        TypePrimDecl name param <$> nameResolution typeName
-    nameResolution (ClassPrimDecl context name param decls) = do
+        return $ DataDecl context' name param body'
+    nameResolution (TypeDecl name param typeName) = TypeDecl name param <$> nameResolution typeName
+    nameResolution (ClassDecl context name param decls) = do
         context' <- nameResolution context
         decls' <- nameResolution decls
-        return $ ClassPrimDecl context' name param decls'
-    nameResolution (InstancePrimDecl context name typeName decls) = do
+        return $ ClassDecl context' name param decls'
+    nameResolution (InstanceDecl context name typeName decls) = do
         name' <- typeNameResolution name
         decls' <- nameResolution decls
-        return $ InstancePrimDecl context name' typeName decls'
-    --nameResolution decl@(FixityPrimDecl _ _ _) = return decl
-    nameResolution (TypeSignaturePrimDecl name typeName) =
-        TypeSignaturePrimDecl name <$> nameResolution typeName
-    nameResolution (BindPrimDecl bind@(Bind lhs _) whereClause) = do
+        return $ InstanceDecl context name' typeName decls'
+    --nameResolution decl@(FixityDecl _ _ _) = return decl
+    nameResolution (TypeSignatureDecl name typeName) =
+        TypeSignatureDecl name <$> nameResolution typeName
+    nameResolution (BindDecl bind@(Bind lhs _) whereClause) = do
         (scope,tnameEnv,gnameEnv,lnameEnv) <- ask
         let lnameEnv' = overwriteNameEnv scope lnameEnv
                 (lhsToIName lhs++concatMap declToName whereClause)
             newSt = (scope,tnameEnv,gnameEnv,lnameEnv')
-        liftM2 BindPrimDecl (nameResolutionT newSt bind) (nameResolutionT newSt whereClause)
+        liftM2 BindDecl (nameResolutionT newSt bind) (nameResolutionT newSt whereClause)
     nameResolution decl = return decl
 
 instance NameResolution Bind where
@@ -128,29 +123,29 @@ instance NameResolution Expr where
     nameResolution (Expr pos expr) = Expr pos <$> nameResolution expr
 
 instance NameResolution PrimExpr where
-    --nameResolution expr@(LiteralPrimExpr literal) = return expr
-    nameResolution (NamePrimExpr name) = NamePrimExpr <$> varNameResolution name
-    nameResolution (ApplyPrimExpr func param) =
-        liftM2 ApplyPrimExpr (nameResolution func) (nameResolution param)
-    nameResolution (InfixPrimExpr op expr1 expr2) =
-        liftM3 InfixPrimExpr (varNameResolution op) (nameResolution expr1) (nameResolution expr2)
-    nameResolution (NegativePrimExpr expr) = NegativePrimExpr <$> nameResolution expr
-    nameResolution (ParenthesesPrimExpr expr) = ParenthesesPrimExpr <$> nameResolution expr
-    nameResolution (ListPrimExpr expr) = ListPrimExpr <$> nameResolution expr
-    nameResolution (LambdaPrimExpr lambdas) = LambdaPrimExpr <$> nameResolution lambdas
-    nameResolution (LetPrimExpr scopeNum lets expr) = do
+    --nameResolution expr@(LiteralExpr _) = return expr
+    nameResolution (NameExpr name) = NameExpr <$> varNameResolution name
+    nameResolution (ApplyExpr func param) =
+        liftM2 ApplyExpr (nameResolution func) (nameResolution param)
+    nameResolution (InfixExpr op expr1 expr2) =
+        liftM3 InfixExpr (varNameResolution op) (nameResolution expr1) (nameResolution expr2)
+    nameResolution (NegativeExpr expr) = NegativeExpr <$> nameResolution expr
+    nameResolution (ParenthesesExpr expr) = ParenthesesExpr <$> nameResolution expr
+    nameResolution (ListExpr expr) = ListExpr <$> nameResolution expr
+    nameResolution (LambdaExpr lambdas) = LambdaExpr <$> nameResolution lambdas
+    nameResolution (LetExpr scopeNum lets expr) = do
         ((modname,scope),tnameEnv,gnameEnv,lnameEnv) <- ask
         let newScope = (modname,scope++[scopeNum])
             lnameEnv' = overwriteNameEnv newScope lnameEnv (concatMap (primDeclToName.snd) lets)
             newSt = (newScope,tnameEnv,gnameEnv,lnameEnv')
-        liftM2 (LetPrimExpr scopeNum)
+        liftM2 (LetExpr scopeNum)
             (mapM (\(p,d) -> (,) p <$> nameResolutionT newSt d) lets) (nameResolutionT newSt expr)
-    nameResolution (IfPrimExpr cond expr1 expr2) =
-        liftM3 IfPrimExpr (nameResolution cond) (nameResolution expr1) (nameResolution expr2)
-    nameResolution (CasePrimExpr expr pats) =
-        liftM2 CasePrimExpr (nameResolution expr) (nameResolution pats)
-    nameResolution (TypeSignaturePrimExpr expr typename) =
-        liftM2 TypeSignaturePrimExpr (nameResolution expr) (nameResolution typename)
+    nameResolution (IfExpr cond expr1 expr2) =
+        liftM3 IfExpr (nameResolution cond) (nameResolution expr1) (nameResolution expr2)
+    nameResolution (CaseExpr expr pats) =
+        liftM2 CaseExpr (nameResolution expr) (nameResolution pats)
+    nameResolution (TypeSignatureExpr expr typename) =
+        liftM2 TypeSignatureExpr (nameResolution expr) (nameResolution typename)
     nameResolution expr = return expr
 
 instance NameResolution Lambda where
@@ -173,20 +168,18 @@ instance NameResolution PatternMatch where
     nameResolution (PatternMatch pos pat) = PatternMatch pos <$> nameResolution pat
 
 instance NameResolution PrimPatternMatch where
-    nameResolution (DCPrimPattern cons pats) =
-        liftM2 DCPrimPattern (varNameResolution cons) (nameResolution pats)
-    --nameResolution pat@(LiteralPrimPattern literal) = return pat
-    nameResolution (DCOpPrimPattern op pat1 pat2) =
-        liftM3 DCOpPrimPattern (varNameResolution op) (nameResolution pat1) (nameResolution pat2)
-    nameResolution (NegativePrimPattern pat) = NegativePrimPattern <$> nameResolution pat
-    nameResolution (ListPrimPattern pats) = ListPrimPattern <$> nameResolution pats
-    --nameResolution pat@(BindPrimPattern str Nothing) = return pat
-    nameResolution (BindPrimPattern str (Just pat)) =
-        (BindPrimPattern str.Just) <$> nameResolution pat
-    nameResolution (ParenthesesPrimPattern pat) = ParenthesesPrimPattern <$> nameResolution pat
-    nameResolution (PrimPatternWithType pat typename) =
-        liftM2 PrimPatternWithType (nameResolution pat) (nameResolution typename)
-    --nameResolution pat@PrimWildCardPattern = return pat
+    nameResolution (DCPattern cons pats) =
+        liftM2 DCPattern (varNameResolution cons) (nameResolution pats)
+    --nameResolution pat@(LiteralPattern _) = return pat
+    nameResolution (DCOpPattern op pat1 pat2) =
+        liftM3 DCOpPattern (varNameResolution op) (nameResolution pat1) (nameResolution pat2)
+    nameResolution (NegativePattern pat) = NegativePattern <$> nameResolution pat
+    nameResolution (ListPattern pats) = ListPattern <$> nameResolution pats
+    nameResolution (BindPattern str pat) = BindPattern str <$> nameResolution pat
+    nameResolution (ParenthesesPattern pat) = ParenthesesPattern <$> nameResolution pat
+    nameResolution (PatternWithType pat typename) =
+        liftM2 PatternWithType (nameResolution pat) (nameResolution typename)
+    --nameResolution pat@WildCardPattern = return pat
     nameResolution pat = return pat
 
 instance NameResolution DataTypeWithContext where

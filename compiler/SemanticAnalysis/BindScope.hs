@@ -34,12 +34,11 @@ instance BindScope Decl where
         Decl pos scope <$> bindScope d
 
 instance BindScope PrimDecl where
-    bindScope (ClassPrimDecl context classname typename body) =
-        return $ ClassPrimDecl context classname typename $ bindScope' body
-    bindScope (InstancePrimDecl context classname typename body) =
-        return $ InstancePrimDecl context classname typename $ bindScope' body
-    bindScope (BindPrimDecl bind decls) =
-        return $ BindPrimDecl (bindScope' bind) (bindScope' decls)
+    bindScope (ClassDecl context classname typename body) =
+        return $ ClassDecl context classname typename $ bindScope' body
+    bindScope (InstanceDecl context classname typename body) =
+        return $ InstanceDecl context classname typename $ bindScope' body
+    bindScope (BindDecl bind decls) = return $ BindDecl (bindScope' bind) (bindScope' decls)
     bindScope decl = return decl
 
 
@@ -58,21 +57,19 @@ instance BindScope Expr where
     bindScope (Expr pos expr) = Expr pos <$> bindScope expr
 
 instance BindScope PrimExpr where
-    bindScope (ApplyPrimExpr expr1 expr2) = liftM2 ApplyPrimExpr (bindScope expr1) (bindScope expr2)
-    bindScope (InfixPrimExpr op expr1 expr2) =
-        liftM2 (InfixPrimExpr op) (bindScope expr1) (bindScope expr2)
-    bindScope (NegativePrimExpr expr) = NegativePrimExpr <$> bindScope expr
-    bindScope (ParenthesesPrimExpr expr) = ParenthesesPrimExpr <$> bindScope expr
-    bindScope (ListPrimExpr exprs) = ListPrimExpr <$> bindScope exprs
-    bindScope (LambdaPrimExpr lambdas) = LambdaPrimExpr <$> bindScope lambdas
-    bindScope (LetPrimExpr _ lets expr) = do
+    bindScope (ApplyExpr expr1 expr2) = liftM2 ApplyExpr (bindScope expr1) (bindScope expr2)
+    bindScope (InfixExpr op expr1 expr2) = liftM2 (InfixExpr op) (bindScope expr1) (bindScope expr2)
+    bindScope (NegativeExpr expr) = NegativeExpr <$> bindScope expr
+    bindScope (ParenthesesExpr expr) = ParenthesesExpr <$> bindScope expr
+    bindScope (ListExpr exprs) = ListExpr <$> bindScope exprs
+    bindScope (LambdaExpr lambdas) = LambdaExpr <$> bindScope lambdas
+    bindScope (LetExpr _ lets expr) = do
         scope <- getNextScope
-        return $ evalState (liftM2 (LetPrimExpr scope)
+        return $ evalState (liftM2 (LetExpr scope)
             (mapM (\(p,d) -> (,) p <$> bindScope d) lets) (bindScope expr)) 0
-    bindScope (IfPrimExpr c t f) = liftM3 IfPrimExpr (bindScope c) (bindScope t) (bindScope f)
-    bindScope (CasePrimExpr expr cases) = liftM2 CasePrimExpr (bindScope expr) (bindScope cases)
-    bindScope (TypeSignaturePrimExpr expr typename) =
-        flip TypeSignaturePrimExpr typename <$> bindScope expr
+    bindScope (IfExpr c t f) = liftM3 IfExpr (bindScope c) (bindScope t) (bindScope f)
+    bindScope (CaseExpr expr cases) = liftM2 CaseExpr (bindScope expr) (bindScope cases)
+    bindScope (TypeSignatureExpr expr typename) = flip TypeSignatureExpr typename <$> bindScope expr
     bindScope expr = return expr
 
 instance BindScope Lambda where

@@ -9,16 +9,16 @@ declToName :: Decl -> [String]
 declToName (Decl _ _ decl) = primDeclToName decl
 
 primDeclToName :: PrimDecl -> [String]
-primDeclToName (BindPrimDecl (Bind lhs _) _) = lhsToOName lhs
+primDeclToName (BindDecl (Bind lhs _) _) = lhsToOName lhs
 primDeclToName _ = []
 
 declToTypeName :: Decl -> [(String,[String])]
 declToTypeName (Decl _ _ decl) = primDeclToTypeName decl
 
 primDeclToTypeName :: PrimDecl -> [(String,[String])]
-primDeclToTypeName (DataPrimDecl _ name _ body) = [(name,map fst body)]
-primDeclToTypeName (TypePrimDecl name _ _) = [(name,[])]
-primDeclToTypeName (ClassPrimDecl _ name _ body) = [(name,nub $ concatMap declToName body)]
+primDeclToTypeName (DataDecl _ name _ body) = [(name,map fst body)]
+primDeclToTypeName (TypeDecl name _ _) = [(name,[])]
+primDeclToTypeName (ClassDecl _ name _ body) = [(name,nub $ concatMap declToName body)]
 primDeclToTypeName _ = []
 
 lhsToOName :: Lhs -> [String]
@@ -35,13 +35,13 @@ patternToNames :: PatternMatch -> [String]
 patternToNames (PatternMatch _ pat) = primPatternToNames pat
 
 primPatternToNames :: PrimPatternMatch -> [String]
-primPatternToNames (DCPrimPattern _ pats) = concatMap patternToNames pats
---primPatternToNames (LiteralPrimPattern _) = []
-primPatternToNames (DCOpPrimPattern _ pat1 pat2) = patternToNames pat1++patternToNames pat2
-primPatternToNames (NegativePrimPattern pat) = patternToNames pat
-primPatternToNames (ListPrimPattern pats) = concatMap patternToNames pats
-primPatternToNames (BindPrimPattern str pat) = str:maybe [] patternToNames pat
-primPatternToNames (ParenthesesPrimPattern pat) = patternToNames pat
-primPatternToNames (PrimPatternWithType pat _) = patternToNames pat
---primPatternToNames PrimWildCardPattern = []
+primPatternToNames (DCPattern _ pats) = concatMap patternToNames pats
+--primPatternToNames (LiteralPattern _) = []
+primPatternToNames (DCOpPattern _ pat1 pat2) = patternToNames pat1++patternToNames pat2
+primPatternToNames (NegativePattern pat) = patternToNames pat
+primPatternToNames (ListPattern pats) = concatMap patternToNames pats
+primPatternToNames (BindPattern str pat) = str:maybe [] patternToNames pat
+primPatternToNames (ParenthesesPattern pat) = patternToNames pat
+primPatternToNames (PatternWithType pat _) = patternToNames pat
+--primPatternToNames WildCardPattern = []
 primPatternToNames _ = []

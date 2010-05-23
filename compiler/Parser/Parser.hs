@@ -316,7 +316,7 @@ dataDeclParser layout = do
     constructors <- sepBy1
         (liftM2 (,) (unscopedcNameToken tlayout) (many $ typeParser 2 tlayout))
         (reservedToken "|" tlayout)
-    return $ DataPrimDecl context typeName params constructors
+    return $ DataDecl context typeName params constructors
 
 typeDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 typeDeclParser layout = do
@@ -326,7 +326,7 @@ typeDeclParser layout = do
     params <- many $ flip (,) undefined <$> unscopedvNameToken tlayout
     reservedToken "=" tlayout
     body <- typeWithContextParser tlayout
-    return $ TypePrimDecl typeName params body
+    return $ TypeDecl typeName params body
 
 classDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 classDeclParser layout = do
@@ -336,7 +336,7 @@ classDeclParser layout = do
     className <- unscopedcNameToken tlayout
     param <- unscopedvNameToken tlayout
     body <- option [] $ reservedToken "where" tlayout >> offsideRuleMany declParser tlayout
-    return $ ClassPrimDecl context className (param,undefined) body
+    return $ ClassDecl context className (param,undefined) body
 
 instanceDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 instanceDeclParser layout = do
@@ -346,14 +346,14 @@ instanceDeclParser layout = do
     className <- cNameToken tlayout
     inst <- typeParser 0 tlayout
     body <- option [] $ reservedToken "where" tlayout >> offsideRuleMany declParser tlayout
-    return $ InstancePrimDecl context className inst body
+    return $ InstanceDecl context className inst body
 
 fixityDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 fixityDeclParser layout = do
     fixity <- fixityParser
     num <- option Nothing (Just <$> operatorLevelParser)
     ops <- sepBy1 (unscopedOpParser tlayout) (reservedToken "," tlayout)
-    return $ FixityPrimDecl fixity num ops
+    return $ FixityDecl fixity num ops
     where
         tlayout = tailElemLayout layout
         fixityParser = (reservedToken "infixl" layout >> return Infixl) <|>
@@ -369,16 +369,15 @@ typeSignatureParser layout = try $ do
     name <- unscopedvNameParser layout
     reservedToken "::" tlayout
     typeName <- typeWithContextParser tlayout
-    return $ TypeSignaturePrimDecl name typeName
+    return $ TypeSignatureDecl name typeName
 
 bindDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 bindDeclParser layout = try $ let tlayout = tailElemLayout layout in
-    liftM2 BindPrimDecl (bindParser "=" layout)
+    liftM2 BindDecl (bindParser "=" layout)
         (option [] $ reservedToken "where" tlayout >> offsideRuleMany declParser tlayout)
 
 simpleBindDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
-simpleBindDeclParser layout =
-    try $ liftM2 BindPrimDecl (bindParser "=" layout) (return [])
+simpleBindDeclParser layout = try $ flip BindDecl [] <$> (bindParser "=" layout)
 
 -- Left/Right Hand Side Parser, Bind Parser
 
@@ -435,24 +434,23 @@ exprWithTypeParser layout = do
     let tlayout = tailElemLayout layout
     expr <- exprParser 1 layout
     option (primExpr expr) $
-        reservedToken "::" tlayout >> (TypeSignaturePrimExpr expr <$> typeWithContextParser tlayout)
+        reservedToken "::" tlayout >> (TypeSignatureExpr expr <$> typeWithContextParser tlayout)
 
 opExprParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 opExprParser layout = do
     let tlayout = tailElemLayout layout
     head <- exprParser 2 layout
-    option (primExpr head) $
-        liftM3 InfixPrimExpr (opParser tlayout) (return head) (exprParser 1 tlayout)
+    option (primExpr head) $ liftM2 (flip InfixExpr head) (opParser tlayout) (exprParser 1 tlayout)
 
 negativeExprParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 negativeExprParser layout =
-    NegativePrimExpr <$> (fixedOpToken "-" layout >> exprParser 2 (tailElemLayout layout))
+    NegativeExpr <$> (fixedOpToken "-" layout >> exprParser 2 (tailElemLayout layout))
 
 lambdaExprParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 lambdaExprParser layout = do
     reservedToken "\\" layout
     body <- sepBy1 oneLambda (reservedToken "|" tlayout)
-    return $ LambdaPrimExpr body
+    return $ LambdaExpr body
     where
         tlayout = tailElemLayout layout
         oneLambda = do
@@ -469,7 +467,7 @@ letParser layout = do
     list <- offsideRuleMany1 letDeclParser tlayout
     reservedToken "in" tlayout
     expr <- exprParser 0 tlayout
-    return $ LetPrimExpr 0 list expr
+    return $ LetExpr 0 list expr
 
 letDeclParser :: LayoutInfo -> Parsec TokenStream u (Position,PrimDecl)
 letDeclParser layout = liftM2 (,) getPos
@@ -484,7 +482,7 @@ ifParser layout = do
     t <- exprParser 0 tlayout
     reservedToken "else" tlayout
     f <- exprParser 0 tlayout
-    return $ IfPrimExpr c t f
+    return $ IfExpr c t f
 
 caseParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 caseParser layout = do
@@ -492,7 +490,7 @@ caseParser layout = do
     expr <- exprParser 0 tlayout
     reservedToken "of" tlayout
     list <- offsideRuleMany1 casePatternParser tlayout
-    return $ CasePrimExpr expr list
+    return $ CaseExpr expr list
     where
         tlayout = tailElemLayout layout
         casePatternParser layout = liftM2 (CasePattern 0)
@@ -501,20 +499,20 @@ caseParser layout = do
 applyParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 applyParser layout = do
     pos <- getPos
-    liftM2 (primExpr `oo` foldl (Expr pos `oo` ApplyPrimExpr))
+    liftM2 (primExpr `oo` foldl (Expr pos `oo` ApplyExpr))
         (exprParser 6 layout) (many $ exprParser 6 $ tailElemLayout layout)
 
 nameExprParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
-nameExprParser layout = NamePrimExpr <$> nameParser layout
+nameExprParser layout = NameExpr <$> nameParser layout
 
 literalParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
-literalParser layout = LiteralPrimExpr <$> literalToken layout
+literalParser layout = LiteralExpr <$> literalToken layout
 
 parenthesesParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
-parenthesesParser layout = ParenthesesPrimExpr <$> layoutParentheses (exprParser 0) layout
+parenthesesParser layout = ParenthesesExpr <$> layoutParentheses (exprParser 0) layout
 
 listParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
-listParser layout = ListPrimExpr <$>
+listParser layout = ListExpr <$>
     layoutBracket (\l -> sepBy (exprParser 0 l) (reservedToken "," l)) layout
 
 -- Pattern Match Parser
@@ -544,7 +542,7 @@ patternWithTypeParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 patternWithTypeParser layout = do
     let tlayout = tailElemLayout layout
     head <- patternParser 1 layout
-    option (primPattern head) $ PrimPatternWithType head <$>
+    option (primPattern head) $ PatternWithType head <$>
         (reservedToken "::" tlayout >> typeWithContextParser tlayout)
 
 opPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
@@ -552,37 +550,36 @@ opPatternParser layout = do
     let tlayout = tailElemLayout layout
     head <- patternParser 2 layout
     option (primPattern head) $
-        liftM3 DCOpPrimPattern (cOpParser tlayout) (return head) (patternParser 1 tlayout)
+        liftM2 (flip DCOpPattern head) (cOpParser tlayout) (patternParser 1 tlayout)
 
 negativePatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 negativePatternParser layout =
-    NegativePrimPattern <$> (fixedOpToken "-" layout >> patternParser 2 (tailElemLayout layout))
+    NegativePattern <$> (fixedOpToken "-" layout >> patternParser 2 (tailElemLayout layout))
 
 dcPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
-dcPatternParser layout = liftM2 DCPrimPattern
+dcPatternParser layout = liftM2 DCPattern
     (cNameParser layout) (many (patternParser 4 (tailElemLayout layout)))
 
 literalPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
-literalPatternParser layout = LiteralPrimPattern <$> literalToken layout
+literalPatternParser layout = LiteralPattern <$> literalToken layout
 
 asPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 asPatternParser layout = do
     let tlayout = tailElemLayout layout
     var <- unscopedvNameParser layout
     if var == "_"
-        then return PrimWildCardPattern
-        else option (BindPrimPattern var Nothing) $
-            BindPrimPattern var <$> Just <$> (reservedToken "@" tlayout >> patternParser 4 tlayout)
+        then return WildCardPattern
+        else BindPattern var <$> (option Nothing $
+            Just <$> (reservedToken "@" tlayout >> patternParser 4 tlayout))
 
 singleDCPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
-singleDCPatternParser layout = flip DCPrimPattern [] <$> cNameParser layout
+singleDCPatternParser layout = flip DCPattern [] <$> cNameParser layout
 
 parenthesesPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
-parenthesesPatternParser layout =
-    ParenthesesPrimPattern <$> layoutParentheses (patternParser 0) layout
+parenthesesPatternParser layout = ParenthesesPattern <$> layoutParentheses (patternParser 0) layout
 
 listPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
-listPatternParser layout = ListPrimPattern <$>
+listPatternParser layout = ListPattern <$>
     layoutBracket (\l -> sepBy (patternParser 0 l) (reservedToken "," l)) layout
 
 -- Type Name Parser

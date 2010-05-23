@@ -44,35 +44,35 @@ instance BindKindVar Decl where
     bindKindVar env (Decl pos scope decl) = Decl pos scope <$> bindKindVar env decl
 
 instance BindKindVar PrimDecl where
-    bindKindVar env (DataPrimDecl context name param body) = do
+    bindKindVar env (DataDecl context name param body) = do
         env' <- addKindVarEnv env $ map fst param++getTyvars context++concatMap (getTyvars.snd) body
         context' <- bindKindVar env' context
         param' <- mapM (getKindVar env'.fst) param
         body' <- mapM (mapM2 (bindKindVar env')) body
-        return $ DataPrimDecl context' name param' body'
-    bindKindVar env (TypePrimDecl name param typename) = do
+        return $ DataDecl context' name param' body'
+    bindKindVar env (TypeDecl name param typename) = do
         env' <- addKindVarEnv env $ map fst param++getTyvars typename
         param' <- mapM (getKindVar env'.fst) param
         typename' <- bindKindVar env' typename
-        return $ TypePrimDecl name param' typename'
-    bindKindVar env (ClassPrimDecl context name param body) = do
+        return $ TypeDecl name param' typename'
+    bindKindVar env (ClassDecl context name param body) = do
         env' <- addKindVarEnv env $ fst param:getTyvars context
         context' <- bindKindVar env' context
         param' <- getKindVar env' $ fst param
         body' <- bindKindVar env' body
-        return $ ClassPrimDecl context' name param' body'
-    bindKindVar env (InstancePrimDecl context name param body) = do
+        return $ ClassDecl context' name param' body'
+    bindKindVar env (InstanceDecl context name param body) = do
         env' <- addKindVarEnv env $ getTyvars context++getTyvars param
         context' <- bindKindVar env' context
         param' <- bindKindVar env' param
         body' <- bindKindVar env' body
-        return $ InstancePrimDecl context' name param' body'
-    --bindKindVar env decl@(FixityPrimDecl _ _ _) = return decl
-    bindKindVar env (TypeSignaturePrimDecl name typename) = do
+        return $ InstanceDecl context' name param' body'
+    --bindKindVar env decl@(FixityDecl _ _ _) = return decl
+    bindKindVar env (TypeSignatureDecl name typename) = do
         env' <- addKindVarEnv env $ getTyvars typename
-        TypeSignaturePrimDecl name <$> bindKindVar env' typename
-    bindKindVar _ (BindPrimDecl bind whereClause) =
-        liftM2 BindPrimDecl (bindKindVar' bind) (bindKindVar' whereClause)
+        TypeSignatureDecl name <$> bindKindVar env' typename
+    bindKindVar _ (BindDecl bind whereClause) =
+        liftM2 BindDecl (bindKindVar' bind) (bindKindVar' whereClause)
     bindKindVar _ decl = return decl
 
 instance BindKindVar Bind where
@@ -95,25 +95,23 @@ instance BindKindVar Expr where
     bindKindVar _ (Expr pos expr) = Expr pos <$> bindKindVar' expr
 
 instance BindKindVar PrimExpr where
-    --bindKindVar _ expr@(LiteralPrimExpr _) = return expr
-    --bindKindVar _ expr@(NamePrimExpr _) = return expr
-    bindKindVar _ (ApplyPrimExpr func param) =
-        liftM2 ApplyPrimExpr (bindKindVar' func) (bindKindVar' param)
-    bindKindVar _ (InfixPrimExpr name left right) =
-        liftM2 (InfixPrimExpr name) (bindKindVar' left) (bindKindVar' right)
-    bindKindVar _ (NegativePrimExpr expr) = NegativePrimExpr <$> bindKindVar' expr
-    bindKindVar _ (ParenthesesPrimExpr expr) = ParenthesesPrimExpr <$> bindKindVar' expr
-    bindKindVar _ (ListPrimExpr expr) = ListPrimExpr <$> mapM bindKindVar' expr
-    bindKindVar _ (LambdaPrimExpr lambda) = LambdaPrimExpr <$> mapM bindKindVar' lambda
-    bindKindVar _ (LetPrimExpr scope lets expr) =
-        liftM2 (LetPrimExpr scope) (mapM (mapM2 bindKindVar') lets) (bindKindVar' expr)
-    bindKindVar _ (IfPrimExpr c t f) =
-        liftM3 IfPrimExpr (bindKindVar' c) (bindKindVar' t) (bindKindVar' f)
-    bindKindVar _ (CasePrimExpr expr pats) =
-        liftM2 CasePrimExpr (bindKindVar' expr) (bindKindVar' pats)
-    bindKindVar _ (TypeSignaturePrimExpr expr typename) = do
+    --bindKindVar _ expr@(LiteralExpr _) = return expr
+    --bindKindVar _ expr@(NameExpr _) = return expr
+    bindKindVar _ (ApplyExpr func param) =
+        liftM2 ApplyExpr (bindKindVar' func) (bindKindVar' param)
+    bindKindVar _ (InfixExpr name left right) =
+        liftM2 (InfixExpr name) (bindKindVar' left) (bindKindVar' right)
+    bindKindVar _ (NegativeExpr expr) = NegativeExpr <$> bindKindVar' expr
+    bindKindVar _ (ParenthesesExpr expr) = ParenthesesExpr <$> bindKindVar' expr
+    bindKindVar _ (ListExpr expr) = ListExpr <$> mapM bindKindVar' expr
+    bindKindVar _ (LambdaExpr lambda) = LambdaExpr <$> mapM bindKindVar' lambda
+    bindKindVar _ (LetExpr scope lets expr) =
+        liftM2 (LetExpr scope) (mapM (mapM2 bindKindVar') lets) (bindKindVar' expr)
+    bindKindVar _ (IfExpr c t f) = liftM3 IfExpr (bindKindVar' c) (bindKindVar' t) (bindKindVar' f)
+    bindKindVar _ (CaseExpr expr pats) = liftM2 CaseExpr (bindKindVar' expr) (bindKindVar' pats)
+    bindKindVar _ (TypeSignatureExpr expr typename) = do
         env <- addKindVarEnv [] $ getTyvars typename
-        liftM2 TypeSignaturePrimExpr (bindKindVar env expr) (bindKindVar env typename)
+        liftM2 TypeSignatureExpr (bindKindVar env expr) (bindKindVar env typename)
     bindKindVar _ expr = return expr
 
 instance BindKindVar Lambda where
@@ -128,18 +126,18 @@ instance BindKindVar PatternMatch where
     bindKindVar _ (PatternMatch pos pat) = PatternMatch pos <$> bindKindVar' pat
 
 instance BindKindVar PrimPatternMatch where
-    bindKindVar _ (DCPrimPattern name pat) = DCPrimPattern name <$> bindKindVar' pat
-    --bindKindVar _ pat@(LiteralPrimPattern _) = return pat
-    bindKindVar _ (DCOpPrimPattern name left right) =
-        liftM2 (DCOpPrimPattern name) (bindKindVar' left) (bindKindVar' right)
-    bindKindVar _ (NegativePrimPattern pat) = NegativePrimPattern <$> bindKindVar' pat
-    bindKindVar _ (ListPrimPattern pat) = ListPrimPattern <$> mapM bindKindVar' pat
-    bindKindVar _ (BindPrimPattern name pat) = BindPrimPattern name <$> bindKindVar' pat
-    bindKindVar _ (ParenthesesPrimPattern pat) = ParenthesesPrimPattern <$> bindKindVar' pat
-    bindKindVar _ (PrimPatternWithType pat typename) = do
+    bindKindVar _ (DCPattern name pat) = DCPattern name <$> bindKindVar' pat
+    --bindKindVar _ pat@(LiteralPattern _) = return pat
+    bindKindVar _ (DCOpPattern name left right) =
+        liftM2 (DCOpPattern name) (bindKindVar' left) (bindKindVar' right)
+    bindKindVar _ (NegativePattern pat) = NegativePattern <$> bindKindVar' pat
+    bindKindVar _ (ListPattern pat) = ListPattern <$> mapM bindKindVar' pat
+    bindKindVar _ (BindPattern name pat) = BindPattern name <$> bindKindVar' pat
+    bindKindVar _ (ParenthesesPattern pat) = ParenthesesPattern <$> bindKindVar' pat
+    bindKindVar _ (PatternWithType pat typename) = do
         env <- addKindVarEnv [] $ getTyvars typename
-        liftM2 PrimPatternWithType (bindKindVar' pat) (bindKindVar env typename)
-    --bindKindVar _ pat@PrimWildCardPattern = return pat
+        liftM2 PatternWithType (bindKindVar' pat) (bindKindVar env typename)
+    --bindKindVar _ pat@WildCardPattern = return pat
     bindKindVar _ pat = return pat
 
 instance BindKindVar DataTypeWithContext where
