@@ -24,9 +24,7 @@ addKindVarEnv env newVars = foldlM addKindVarEnv' env (nub $ newVars \\ map fst 
     addKindVarEnv' env n = (:env) <$> (,) n <$> newKindVar
 
 getKindVar :: [(String,Int)] -> String -> KindInferenceMonad (String,Int)
-getKindVar t s = case lookup s t of
-    (Just n) -> return (s,n)
-    Nothing -> lift $ Left KindInferenceError
+getKindVar t s = maybe (lift (Left KindInferenceError)) (return.(,) s) (lookup s t)
 
 class BindKindVar a where
     bindKindVar :: [(String,Int)] -> a -> KindInferenceMonad a

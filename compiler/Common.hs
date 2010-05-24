@@ -1,10 +1,8 @@
 
 module Yadorigi.Common (amap,iterateToConverge,iterateToConvergeM,writeLater) where
 
-import Control.Applicative
-
-amap :: a -> [a -> b] -> [b]
-amap = (<**>).pure
+amap :: Functor f => a -> f (a -> b) -> f b
+amap = fmap.flip id
 
 iterateToConverge :: Eq a => (a -> a) -> a -> a
 iterateToConverge f a = let a' = f a in
