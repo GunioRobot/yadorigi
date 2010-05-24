@@ -161,22 +161,22 @@ instance BindKindVar PrimDataType where
     bindKindVar env (ParenthesesType typename) = ParenthesesType <$> bindKindVar env typename
     bindKindVar env typename = return typename
 
-class HaveTyvars a where
+class HasTyvars a where
     getTyvars :: a -> [String]
 
-instance HaveTyvars a => HaveTyvars [a] where
+instance HasTyvars a => HasTyvars [a] where
     getTyvars = concatMap getTyvars
 
-instance HaveTyvars DataTypeWithContext where
+instance HasTyvars DataTypeWithContext where
     getTyvars (DataTypeWithContext _ context typename) = getTyvars context++getTyvars typename
 
-instance HaveTyvars TypeContext where
+instance HasTyvars TypeContext where
     getTyvars (TypeContext _ v _) = [v]
 
-instance HaveTyvars DataType where
+instance HasTyvars DataType where
     getTyvars (DataType _ typename) = getTyvars typename
 
-instance HaveTyvars PrimDataType where
+instance HasTyvars PrimDataType where
     getTyvars (VarType v _) = [v]
     --getTyvars (ConstructorType _) = []
     --getTyvars (ReservedConstructorType _) = []

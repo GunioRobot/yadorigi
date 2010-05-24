@@ -229,6 +229,7 @@ instance Show Kind where
     show AstKind = "*"
     show (FuncKind a b) = "("++show a++" -> "++show b++")"
     show (VarKind n s) = "#"++show n++"#"++s
+    show AnyKind = "Any"
 
 -- Literal
 
