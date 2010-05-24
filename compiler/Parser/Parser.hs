@@ -597,7 +597,7 @@ contextParser layout = option [] $ try $
             (cNameParser layout) (unscopedvNameParser (tailElemLayout layout)) (return undefined)
 
 typeParser :: Int -> LayoutInfo -> Parsec TokenStream u DataType
-typeParser n layout = DataType undefined <$> primTypeParser n layout
+typeParser n layout = DataType AnyKind <$> primTypeParser n layout
 
 primTypeParser :: Int -> LayoutInfo -> Parsec TokenStream u PrimDataType
 primTypeParser 0 = functionTypeParser
@@ -616,7 +616,7 @@ functionTypeParser layout = do
 
 applyTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 applyTypeParser layout =
-    primType <$> foldl1 (DataType undefined `oo` ApplyType) <$> layoutMany1 (typeParser 2) layout
+    primType <$> foldl1 (DataType AnyKind `oo` ApplyType) <$> layoutMany1 (typeParser 2) layout
 
 listTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
 listTypeParser =

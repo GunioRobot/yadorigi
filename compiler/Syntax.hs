@@ -223,6 +223,7 @@ data Kind
     = AstKind
     | FuncKind Kind Kind
     | VarKind Int String
+    | AnyKind
 
 instance Show Kind where
     show AstKind = "*"
