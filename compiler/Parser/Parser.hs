@@ -425,6 +425,7 @@ primExprParser 3 = layoutChoice [lambdaExprParser,primExprParser 4]
 primExprParser 4 = layoutChoice [letParser,ifParser,caseParser,primExprParser 5]
 primExprParser 5 = applyParser
 primExprParser 6 = layoutChoice [nameExprParser,literalParser,parenthesesParser,listParser]
+primExprParser _ = error "Parser.Parser.primExprParser : Invalid argument"
 
 primExpr :: Expr -> PrimExpr
 primExpr (Expr _ expr) = expr
@@ -534,6 +535,7 @@ primPatternParser 2 = layoutChoice [negativePatternParser,primPatternParser 3]
 primPatternParser 3 = layoutChoice [dcPatternParser,primPatternParser 4]
 primPatternParser 4 = layoutChoice [literalPatternParser
     ,asPatternParser,parenthesesPatternParser,listPatternParser,singleDCPatternParser]
+primPatternParser _ = error "Parser.Parser.primPatternParser : Invalid argument"
 
 primPattern :: PatternMatch -> PrimPatternMatch
 primPattern (PatternMatch _ pattern) = pattern
@@ -604,6 +606,7 @@ primTypeParser 0 = functionTypeParser
 primTypeParser 1 = layoutChoice [applyTypeParser,primTypeParser 2]
 primTypeParser 2 = layoutChoice
     [listTypeParser,parenthesesTypeParser,constructorTypeParser,variableTypeParser]
+primTypeParser _ = error "Parser.Parser.primTypeParser : Invalid argument"
 
 primType :: DataType -> PrimDataType
 primType (DataType _ typename) = typename
