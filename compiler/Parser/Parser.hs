@@ -599,39 +599,33 @@ contextParser layout = option [] $ try $
             (cNameParser layout) (unscopedvNameParser (tailElemLayout layout)) (return undefined)
 
 typeParser :: Int -> LayoutInfo -> Parsec TokenStream u DataType
-typeParser n layout = DataType AnyKind <$> primTypeParser n layout
-
-primTypeParser :: Int -> LayoutInfo -> Parsec TokenStream u PrimDataType
-primTypeParser 0 = functionTypeParser
-primTypeParser 1 = layoutChoice [applyTypeParser,primTypeParser 2]
-primTypeParser 2 = layoutChoice
+typeParser 0 = functionTypeParser
+typeParser 1 = layoutChoice [applyTypeParser,typeParser 2]
+typeParser 2 = layoutChoice
     [listTypeParser,parenthesesTypeParser,constructorTypeParser,variableTypeParser]
-primTypeParser _ = error "Parser.Parser.primTypeParser : Invalid argument"
+typeParser _ = error "Parser.Parser.primTypeParser : Invalid argument"
 
-primType :: DataType -> PrimDataType
-primType (DataType _ typename) = typename
-
-functionTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+functionTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 functionTypeParser layout = do
     f <- typeParser 1 layout
-    option (primType f) $ FunctionType f <$>
+    option f $ FunctionType f <$>
         (reservedToken "->" (tailElemLayout layout) >> typeParser 0 layout)
 
-applyTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+applyTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 applyTypeParser layout =
-    primType <$> foldl1 (DataType AnyKind `oo` ApplyType) <$> layoutMany1 (typeParser 2) layout
+    foldl1 ApplyType <$> layoutMany1 (typeParser 2) layout
 
-listTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+listTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 listTypeParser =
-    layoutBracket (\l -> option (ReservedConstructorType "[]") (ListType <$> typeParser 0 l))
+    layoutBracket (\l -> option (ReservedConstructorType AnyKind "[]") (ListType <$> typeParser 0 l))
 
-parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
+parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 parenthesesTypeParser = layoutParentheses (\l -> (ParenthesesType <$> typeParser 0 l) <|>
-    (reservedToken "->" l >> return (ReservedConstructorType "->")))
+    (reservedToken "->" l >> return (ReservedConstructorType AnyKind "->")))
 
-constructorTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
-constructorTypeParser layout = ConstructorType <$> cNameParser layout
+constructorTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+constructorTypeParser layout = ConstructorType AnyKind <$> cNameParser layout
 
-variableTypeParser :: LayoutInfo -> Parsec TokenStream u PrimDataType
-variableTypeParser layout = flip VarType undefined <$> unscopedvNameParser layout
+variableTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
+variableTypeParser layout = VarType AnyKind <$> unscopedvNameParser layout
 

@@ -196,24 +196,19 @@ data TypeContext = TypeContext ScopedName String Int
 instance Show TypeContext where
     show (TypeContext typeclass typename _) = show typeclass++" "++typename
 
-data DataType = DataType Kind PrimDataType
-
-instance Show DataType where
-    show (DataType _ typename) = show typename
-
-data PrimDataType
-    = VarType String Int {- variable type -}
-    | ConstructorType ScopedName {- constructor type -}
-    | ReservedConstructorType String {- reserved constructor type -}
+data DataType
+    = VarType Kind String {- variable type -}
+    | ConstructorType Kind ScopedName {- constructor type -}
+    | ReservedConstructorType Kind String {- reserved constructor type -}
     | ApplyType DataType DataType {- composed type -}
     | ListType DataType {- list type -}
     | FunctionType DataType DataType {- function type -}
     | ParenthesesType DataType {- parentheses type -}
 
-instance Show PrimDataType where
-    show (VarType str _) = str
-    show (ConstructorType name) = show name
-    show (ReservedConstructorType str) = str
+instance Show DataType where
+    show (VarType _ str) = str
+    show (ConstructorType _ name) = show name
+    show (ReservedConstructorType _ str) = str
     show (ApplyType cons param) = "("++show cons++" "++show param++")"
     show (ListType param) = "["++show param++"]"
     show (FunctionType t1 t2) = "("++show t1++" -> "++show t2++")"

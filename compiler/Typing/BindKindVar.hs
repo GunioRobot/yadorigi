@@ -147,12 +147,10 @@ instance BindKindVar TypeContext where
         uncurry (TypeContext typeclass) <$> getKindVar env typename
 
 instance BindKindVar DataType where
-    bindKindVar env (DataType kind typename) = DataType kind <$> bindKindVar env typename
-
-instance BindKindVar PrimDataType where
-    bindKindVar env (VarType typename _) = uncurry VarType <$> getKindVar env typename
-    --bindKindVar env typename@(ConstructorType _) = return typename
-    --bindKindVar env typename@(ReservedConstructorType _) = return typename
+    bindKindVar env (VarType _ typename) =
+        flip VarType typename.flip VarKind "".snd <$> getKindVar env typename
+    --bindKindVar env typename@(ConstructorType _ _) = return typename
+    --bindKindVar env typename@(ReservedConstructorType _ _) = return typename
     bindKindVar env (ApplyType cons param) =
         liftM2 ApplyType (bindKindVar env cons) (bindKindVar env param)
     bindKindVar env (ListType typename) = ListType <$> bindKindVar env typename
@@ -174,10 +172,7 @@ instance HasTyvars TypeContext where
     getTyvars (TypeContext _ v _) = [v]
 
 instance HasTyvars DataType where
-    getTyvars (DataType _ typename) = getTyvars typename
-
-instance HasTyvars PrimDataType where
-    getTyvars (VarType v _) = [v]
+    getTyvars (VarType _ v) = [v]
     --getTyvars (ConstructorType _) = []
     --getTyvars (ReservedConstructorType _) = []
     getTyvars (ApplyType a b) = getTyvars a++getTyvars b

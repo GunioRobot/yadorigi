@@ -191,12 +191,9 @@ instance NameResolution TypeContext where
         liftM3 TypeContext (typeNameResolution cls) (return instanceName) (return instanceNum)
 
 instance NameResolution DataType where
-    nameResolution (DataType kind typename) = DataType kind <$> nameResolution typename
-
-instance NameResolution PrimDataType where
-    --nameResolution typename@(VarType str) = return typename
-    nameResolution (ConstructorType cons) = ConstructorType <$> typeNameResolution cons
-    --nameResolution typename(ReservedConstructorType str) = return typename
+    --nameResolution typename@(VarType _ _) = return typename
+    nameResolution (ConstructorType kind cons) = ConstructorType kind <$> typeNameResolution cons
+    --nameResolution typename(ReservedConstructorType _ _) = return typename
     nameResolution (ApplyType typename1 typename2) =
         liftM2 ApplyType (nameResolution typename1) (nameResolution typename2)
     nameResolution (ListType typename) = ListType <$> nameResolution typename
