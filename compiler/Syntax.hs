@@ -189,7 +189,7 @@ instance Show PrimPatternMatch where
 data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
 
 instance Show DataTypeWithContext where
-    show (DataTypeWithContext _ context typename) = show context++show typename
+    show (DataTypeWithContext _ context typename) = showContext context++show typename
 
 data TypeContext = TypeContext ScopedName String Int
 
@@ -199,7 +199,7 @@ instance Show TypeContext where
 data DataType
     = VarType Kind String {- variable type -}
     | ConstructorType Kind ScopedName {- constructor type -}
-    | ReservedConstructorType Kind String {- reserved constructor type -}
+    | ReservedType Kind String {- reserved type -}
     | ApplyType DataType DataType {- composed type -}
     | ListType DataType {- list type -}
     | FunctionType DataType DataType {- function type -}
@@ -208,7 +208,7 @@ data DataType
 instance Show DataType where
     show (VarType _ str) = str
     show (ConstructorType _ name) = show name
-    show (ReservedConstructorType _ str) = str
+    show (ReservedType _ str) = str
     show (ApplyType cons param) = "("++show cons++" "++show param++")"
     show (ListType param) = "["++show param++"]"
     show (FunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
@@ -267,6 +267,7 @@ showLayoutList = unlines.map ("    "++).concatMap (lines.show)
 
 showContext :: [TypeContext] -> String
 showContext [] = ""
+showContext [context] = show context++" => "
 showContext context = "("++(intercalate "," (map show context))++") => "
 
 showModuleName :: ModuleName -> String

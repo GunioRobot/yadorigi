@@ -149,15 +149,15 @@ instance BindKindVar TypeContext where
 instance BindKindVar DataType where
     bindKindVar env (VarType _ typename) =
         flip VarType typename.flip VarKind "".snd <$> getKindVar env typename
-    --bindKindVar env typename@(ConstructorType _ _) = return typename
-    --bindKindVar env typename@(ReservedConstructorType _ _) = return typename
+    bindKindVar env (ConstructorType _ cons) =
+        flip ConstructorType cons.flip VarKind "" <$> newKindVar
+    bindKindVar env (ReservedType _ cons) = flip ReservedType cons.flip VarKind "" <$> newKindVar
     bindKindVar env (ApplyType cons param) =
         liftM2 ApplyType (bindKindVar env cons) (bindKindVar env param)
     bindKindVar env (ListType typename) = ListType <$> bindKindVar env typename
     bindKindVar env (FunctionType t1 t2) =
         liftM2 FunctionType (bindKindVar env t1) (bindKindVar env t2)
     bindKindVar env (ParenthesesType typename) = ParenthesesType <$> bindKindVar env typename
-    bindKindVar env typename = return typename
 
 class HasTyvars a where
     getTyvars :: a -> [String]
@@ -174,7 +174,7 @@ instance HasTyvars TypeContext where
 instance HasTyvars DataType where
     getTyvars (VarType _ v) = [v]
     --getTyvars (ConstructorType _) = []
-    --getTyvars (ReservedConstructorType _) = []
+    --getTyvars (ReservedType _) = []
     getTyvars (ApplyType a b) = getTyvars a++getTyvars b
     getTyvars (ListType typename) = getTyvars typename
     getTyvars (FunctionType a b) = getTyvars a++getTyvars b

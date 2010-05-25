@@ -34,7 +34,7 @@ unify (VarKind n _) kind = addSubst n kind
 unify kind (VarKind n _) = addSubst n kind
 unify _ _ = lift $ Left KindInferenceError
 
---kindInference :: DataType -> KindInferenceMonad Kind
+--kindInference :: DataType -> KindInferenceMonad ()
 --kindInference
 
 

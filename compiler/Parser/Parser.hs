@@ -607,21 +607,20 @@ typeParser _ = error "Parser.Parser.primTypeParser : Invalid argument"
 
 functionTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 functionTypeParser layout = do
+    let tlayout = tailElemLayout layout
     f <- typeParser 1 layout
-    option f $ FunctionType f <$>
-        (reservedToken "->" (tailElemLayout layout) >> typeParser 0 layout)
+    option f $ FunctionType f <$> (reservedToken "->" tlayout >> typeParser 0 tlayout)
 
 applyTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-applyTypeParser layout =
-    foldl1 ApplyType <$> layoutMany1 (typeParser 2) layout
+applyTypeParser layout = foldl1 ApplyType <$> layoutMany1 (typeParser 2) layout
 
 listTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 listTypeParser =
-    layoutBracket (\l -> option (ReservedConstructorType AnyKind "[]") (ListType <$> typeParser 0 l))
+    layoutBracket (\l -> option (ReservedType AnyKind "[]") (ListType <$> typeParser 0 l))
 
 parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 parenthesesTypeParser = layoutParentheses (\l -> (ParenthesesType <$> typeParser 0 l) <|>
-    (reservedToken "->" l >> return (ReservedConstructorType AnyKind "->")))
+    (reservedToken "->" l >> return (ReservedType AnyKind "->")))
 
 constructorTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 constructorTypeParser layout = ConstructorType AnyKind <$> cNameParser layout

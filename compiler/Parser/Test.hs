@@ -17,9 +17,6 @@ main = do
     case tokenizerResult of
         (Right ts) -> do
             mapM print ts
-            let parserResult = runParser moduleParser () "<tokenStream>" ts
-            case parserResult of
-                (Right result) -> print result
-                (Left error) -> print error
+            either print print (runParser moduleParser () "<tokenStream>" ts)
         (Left error) -> print error
 
