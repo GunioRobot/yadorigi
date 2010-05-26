@@ -16,7 +16,7 @@ class BindScope t where
 
 
 getNextScope :: State Int Int
-getNextScope = fst <$> stateTrans (+1)
+getNextScope = fst <$> stateTrans (1+)
 
 
 instance BindScope t => BindScope [t] where

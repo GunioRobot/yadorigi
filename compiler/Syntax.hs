@@ -218,13 +218,11 @@ data Kind
     = AstKind
     | FuncKind Kind Kind
     | VarKind Int String
-    | AnyKind
 
 instance Show Kind where
     show AstKind = "*"
     show (FuncKind a b) = "("++show a++" -> "++show b++")"
     show (VarKind n s) = "#"++show n++"#"++s
-    show AnyKind = "Any"
 
 -- Literal
 

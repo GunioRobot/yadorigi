@@ -616,15 +616,15 @@ applyTypeParser layout = foldl1 ApplyType <$> layoutMany1 (typeParser 2) layout
 
 listTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 listTypeParser =
-    layoutBracket (\l -> option (ReservedType AnyKind "[]") (ListType <$> typeParser 0 l))
+    layoutBracket (\l -> option (ReservedType undefined "[]") (ListType <$> typeParser 0 l))
 
 parenthesesTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
 parenthesesTypeParser = layoutParentheses (\l -> (ParenthesesType <$> typeParser 0 l) <|>
-    (reservedToken "->" l >> return (ReservedType AnyKind "->")))
+    (reservedToken "->" l >> return (ReservedType undefined "->")))
 
 constructorTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-constructorTypeParser layout = ConstructorType AnyKind <$> cNameParser layout
+constructorTypeParser layout = ConstructorType undefined <$> cNameParser layout
 
 variableTypeParser :: LayoutInfo -> Parsec TokenStream u DataType
-variableTypeParser layout = VarType AnyKind <$> unscopedvNameParser layout
+variableTypeParser layout = VarType undefined <$> unscopedvNameParser layout
 
