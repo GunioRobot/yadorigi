@@ -76,8 +76,12 @@ match _ _ = lift $ Left KindInferenceError
 --    unifyAll _ = return ()
 --
 --instance KindInference Bind where
---    unifyAll (Bind lhs rhs) =
+--    unifyAll (Bind lhs rhs) = unifyAll lhs >> unifyAll rhs
+--
+--instance KindInference Lhs where
+--    unifyAll
 --
 --class KindInference' a where
 --    unifyAll' :: a -> KindInferenceMonad Kind
+
 

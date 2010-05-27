@@ -31,7 +31,7 @@ nameResolutionModule (mod,modname,names,types) =
         types' = [(modname,smodname,name) | ((modname,name),_,smodname) <- types] in
             nameResolution' ((modname,[]),gnames,types',lnames) mod
 
-overwriteNameEnv :: Scope -> [LNameEnv] -> ModuleName -> [LNameEnv]
+overwriteNameEnv :: Scope -> [LNameEnv] -> [String] -> [LNameEnv]
 overwriteNameEnv (modname,scope) list names = foldl overwriteIter list names
     where
         overwriteIter :: [LNameEnv] -> String -> [LNameEnv]

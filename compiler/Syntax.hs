@@ -53,27 +53,28 @@ instance Show Decl where
     show (Decl _ scope decl) = "#"++show scope++"# "++show decl
 
 data PrimDecl
-    = DataDecl [TypeContext] String [(String,Kind)] [(String,[DataType])]
-    | TypeDecl String [(String,Kind)] QualDataType
+    = DataDecl [TypeContext] ScopedName [(String,Kind)] [(ScopedName,[DataType])]
+    | TypeDecl ScopedName [(String,Kind)] QualDataType
     | ClassDecl [TypeContext] String (String,Kind) [Decl]
     | InstanceDecl [TypeContext] ScopedName DataType [Decl]
-    | FixityDecl Fixity (Maybe Int) [String]
-    | TypeSignatureDecl String QualDataType
+    | FixityDecl Fixity (Maybe Int) [ScopedName]
+    | TypeSignatureDecl [ScopedName] QualDataType
     | BindDecl Bind [Decl]
 
 instance Show PrimDecl where
-    show (DataDecl context str param body) =
-        "data "++showContext context++str++concatMap ((' ':).fst) param++" = "++
-        intercalate " | " (map (\(s,l) -> s++concatMap ((' ':).show) l) body)
-    show (TypeDecl str param typeName) =
-        "type "++str++intercalate " " (map fst param)++" = "++show typeName
+    show (DataDecl context name param body) =
+        "data "++showContext context++show name++concatMap ((' ':).fst) param++" = "++
+        intercalate " | " (map (\(c,l) -> show c++concatMap ((' ':).show) l) body)
+    show (TypeDecl name param typeName) =
+        "type "++show name++intercalate " " (map fst param)++" = "++show typeName
     show (ClassDecl context className typeName body) =
         "class "++showContext context++className++" "++fst typeName++showWhereClause body
     show (InstanceDecl context className typeName body) =
         "instance "++showContext context++show className++" "++show typeName++showWhereClause body
     show (FixityDecl fixity Nothing list) = show fixity++" "++show list
-    show (FixityDecl fixity (Just num) list) = show fixity++" "++show num++" "++intercalate " " list
-    show (TypeSignatureDecl str typeName) = str++" :: "++show typeName
+    show (FixityDecl fixity (Just num) list) =
+        show fixity++" "++show num++" "++intercalate " " (map show list)
+    show (TypeSignatureDecl list typeName) = intercalate "," (map show list)++" :: "++show typeName
     show (BindDecl bind whereClause) = show bind++showWhereClause whereClause
 
 data Fixity = Infixl | Infix | Infixr deriving Show
@@ -86,13 +87,13 @@ instance Show Bind where
     show (Bind lhs rhs) = show lhs++" = "++show rhs
 
 data Lhs
-    = FunctionLhs String [PatternMatch]
-    | InfixLhs String PatternMatch PatternMatch
+    = FunctionLhs ScopedName [PatternMatch]
+    | InfixLhs ScopedName PatternMatch PatternMatch
     | PatternLhs PatternMatch
 
 instance Show Lhs where
-    show (FunctionLhs name param) = name++concatMap ((' ':).show) param
-    show (InfixLhs name pat1 pat2) = show pat1++" "++name++" "++show pat2
+    show (FunctionLhs name param) = show name++concatMap ((' ':).show) param
+    show (InfixLhs name pat1 pat2) = show pat1++" "++show name++" "++show pat2
     show (PatternLhs pat) = show pat
 
 data Rhs
@@ -168,7 +169,7 @@ data PrimPatternMatch
     | DCOpPattern ScopedName PatternMatch PatternMatch {- infix data constructor pattern -}
     | NegativePattern PatternMatch {- negative pattern -}
     | ListPattern [PatternMatch] {- list pattern -}
-    | BindPattern String (Maybe PatternMatch) {- bind pattern, as pattern -}
+    | BindPattern ScopedName (Maybe PatternMatch) {- bind pattern, as pattern -}
     | ParenthesesPattern PatternMatch {- Parentheses Pattern -}
     | TypeSignaturePattern PatternMatch QualDataType {- pattern with data type information -}
     | WildCardPattern {- wild card pattern -}
@@ -179,7 +180,7 @@ instance Show PrimPatternMatch where
     show (DCOpPattern name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
     show (NegativePattern pat) = "-"++show pat
     show (ListPattern pat) = show pat
-    show (BindPattern str pat) = "("++str++maybe "" (("@"++).show) pat++")"
+    show (BindPattern str pat) = "("++show str++maybe "" (("@"++).show) pat++")"
     show (ParenthesesPattern pat) = "("++show pat++")"
     show (TypeSignaturePattern pat typename) = "("++show pat++show typename++")"
     show WildCardPattern = "_"

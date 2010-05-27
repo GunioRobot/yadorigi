@@ -1,6 +1,8 @@
 
 module Yadorigi.Data.Function.Compose where
 
+import Control.Applicative
+
 oo :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 oo = (.).(.)
 
@@ -50,4 +52,13 @@ oooooooooo , (..........) ::
     a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> l
 oooooooooo = ooooooooo.(.)
 (..........) = oooooooooo
+
+(<.>) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
+(<.>) = (.).(<$>)
+
+(<..>) :: Functor f => (c -> d) -> (a -> b -> f c) -> a -> b -> f d
+(<..>) = oo.(<$>)
+
+(<...>) :: Functor f => (d -> e) -> (a -> b -> c -> f d) -> a -> b -> c -> f e
+(<...>) = ooo.(<$>)
 

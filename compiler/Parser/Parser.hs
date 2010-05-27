@@ -236,6 +236,11 @@ layoutBackquotes parser layout = let tlayout = tailElemLayout layout in
 layoutChoice :: [LayoutInfo -> Parsec TokenStream u a] -> LayoutInfo -> Parsec TokenStream u a
 layoutChoice list layout = choice $ amap layout list
 
+layoutSepBy1 :: (LayoutInfo -> Parsec [s] u a) ->
+    (LayoutInfo -> Parsec [s] u b) -> LayoutInfo -> Parsec [s] u [a]
+layoutSepBy1 parser sep layout = let tlayout = tailElemLayout layout in
+    liftM2 (:) (parser layout) (many (sep tlayout *> parser tlayout))
+
 -- Module Parser
 
 moduleParser :: Parsec TokenStream u Module
@@ -310,11 +315,11 @@ dataDeclParser layout = do
     let tlayout = tailElemLayout layout
     reservedToken "data" layout
     context <- contextParser tlayout
-    typeName <- unscopedcNameToken tlayout
+    typeName <- ScopedName [] [] <$> unscopedcNameToken tlayout
     params <- many $ flip (,) undefined <$> unscopedvNameToken tlayout
     reservedToken "=" tlayout
     constructors <- sepBy1
-        (liftM2 (,) (unscopedcNameToken tlayout) (many $ typeParser 2 tlayout))
+        (liftM2 (,) (ScopedName [] [] <$> unscopedcNameToken tlayout) (many $ typeParser 2 tlayout))
         (reservedToken "|" tlayout)
     return $ DataDecl context typeName params constructors
 
@@ -322,7 +327,7 @@ typeDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 typeDeclParser layout = do
     let tlayout = tailElemLayout layout
     reservedToken "type" layout
-    typeName <- unscopedcNameToken tlayout
+    typeName <- ScopedName [] [] <$> unscopedcNameToken tlayout
     params <- many $ flip (,) undefined <$> unscopedvNameToken tlayout
     reservedToken "=" tlayout
     body <- qualTypeParser tlayout
@@ -352,7 +357,7 @@ fixityDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 fixityDeclParser layout = do
     fixity <- fixityParser
     num <- option Nothing (Just <$> operatorLevelParser)
-    ops <- sepBy1 (unscopedOpParser tlayout) (reservedToken "," tlayout)
+    ops <- layoutSepBy1 (ScopedName [] [] <.> unscopedOpParser) (reservedToken ",") tlayout
     return $ FixityDecl fixity num ops
     where
         tlayout = tailElemLayout layout
@@ -366,10 +371,10 @@ fixityDeclParser layout = do
 typeSignatureParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 typeSignatureParser layout = try $ do
     let tlayout = tailElemLayout layout
-    name <- unscopedvNameParser layout
+    names <- layoutSepBy1 (ScopedName [] [] <.> unscopedvNameParser) (reservedToken ",") layout
     reservedToken "::" tlayout
     typeName <- qualTypeParser tlayout
-    return $ TypeSignatureDecl name typeName
+    return $ TypeSignatureDecl names typeName
 
 bindDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 bindDeclParser layout = try $ let tlayout = tailElemLayout layout in
@@ -388,13 +393,13 @@ lhsParser :: LayoutInfo -> Parsec TokenStream u Lhs
 lhsParser = layoutChoice [try.functionLhsParser,try.infixLhsParser,try.patternLhsParser]
 
 functionLhsParser :: LayoutInfo -> Parsec TokenStream u Lhs
-functionLhsParser layout =
-    liftM2 FunctionLhs (unscopedvNameParser layout) (many1PatternParser (tailElemLayout layout))
+functionLhsParser layout = liftM2 FunctionLhs
+    (ScopedName [] [] <$> unscopedvNameParser layout) (many1PatternParser (tailElemLayout layout))
 
 infixLhsParser :: LayoutInfo -> Parsec TokenStream u Lhs
 infixLhsParser layout = let tlayout = tailElemLayout layout in
-    liftM3 (flip InfixLhs)
-        (patternParser 1 layout) (unscopedvOpParser tlayout) (patternParser 1 tlayout)
+    liftM3 (flip InfixLhs) (patternParser 1 layout)
+        (ScopedName [] [] <$> unscopedvOpParser tlayout) (patternParser 1 tlayout)
 
 patternLhsParser :: LayoutInfo -> Parsec TokenStream u Lhs
 patternLhsParser layout = PatternLhs <$> patternParser 0 layout
@@ -571,7 +576,7 @@ asPatternParser layout = do
     var <- unscopedvNameParser layout
     if var == "_"
         then return WildCardPattern
-        else BindPattern var <$> (option Nothing $
+        else BindPattern (ScopedName [] [] var) <$> (option Nothing $
             Just <$> (reservedToken "@" tlayout >> patternParser 4 tlayout))
 
 singleDCPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
