@@ -325,7 +325,7 @@ typeDeclParser layout = do
     typeName <- unscopedcNameToken tlayout
     params <- many $ flip (,) undefined <$> unscopedvNameToken tlayout
     reservedToken "=" tlayout
-    body <- typeWithContextParser tlayout
+    body <- qualTypeParser tlayout
     return $ TypeDecl typeName params body
 
 classDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
@@ -368,7 +368,7 @@ typeSignatureParser layout = try $ do
     let tlayout = tailElemLayout layout
     name <- unscopedvNameParser layout
     reservedToken "::" tlayout
-    typeName <- typeWithContextParser tlayout
+    typeName <- qualTypeParser tlayout
     return $ TypeSignatureDecl name typeName
 
 bindDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
@@ -435,7 +435,7 @@ exprWithTypeParser layout = do
     let tlayout = tailElemLayout layout
     expr <- exprParser 1 layout
     option (primExpr expr) $
-        reservedToken "::" tlayout >> (TypeSignatureExpr expr <$> typeWithContextParser tlayout)
+        reservedToken "::" tlayout >> (TypeSignatureExpr expr <$> qualTypeParser tlayout)
 
 opExprParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
 opExprParser layout = do
@@ -544,8 +544,8 @@ patternWithTypeParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 patternWithTypeParser layout = do
     let tlayout = tailElemLayout layout
     head <- patternParser 1 layout
-    option (primPattern head) $ PatternWithType head <$>
-        (reservedToken "::" tlayout >> typeWithContextParser tlayout)
+    option (primPattern head) $ TypeSignaturePattern head <$>
+        (reservedToken "::" tlayout >> qualTypeParser tlayout)
 
 opPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 opPatternParser layout = do
@@ -586,8 +586,8 @@ listPatternParser layout = ListPattern <$>
 
 -- Type Name Parser
 
-typeWithContextParser :: LayoutInfo -> Parsec TokenStream u DataTypeWithContext
-typeWithContextParser layout = liftM3 DataTypeWithContext
+qualTypeParser :: LayoutInfo -> Parsec TokenStream u QualDataType
+qualTypeParser layout = liftM3 QualDataType
     getPos (contextParser layout) (typeParser 0 (tailElemLayout layout))
 
 contextParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]

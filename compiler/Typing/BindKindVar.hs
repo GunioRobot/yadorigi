@@ -10,7 +10,7 @@ import Yadorigi.Typing.KindInference
 
 import Prelude hiding (foldl, foldl1, foldr, foldr1, mapM, mapM_, sequence, sequence_,
     concat, concatMap, and, or, any, all, sum, product, maximum, minimum, elem, notElem)
-import Data.List hiding (concatMap)
+import Data.List hiding (concatMap, elem, notElem)
 import Data.Functor
 import Data.Foldable
 import Data.Traversable
@@ -25,6 +25,9 @@ addKindVarEnv env newVars = foldlM addKindVarEnv' env (nub $ newVars \\ map fst 
 
 getKindVar :: [(String,Int)] -> String -> KindInferenceMonad (String,Int)
 getKindVar t s = maybe (lift (Left KindInferenceError)) (return.(,) s) (lookup s t)
+
+numToVarKind :: Int -> Kind
+numToVarKind n = VarKind n ""
 
 class BindKindVar a where
     bindKindVar :: [(String,Int)] -> a -> KindInferenceMonad a
@@ -45,18 +48,18 @@ instance BindKindVar PrimDecl where
     bindKindVar env (DataDecl context name param body) = do
         env' <- addKindVarEnv env $ map fst param++getTyvars context++concatMap (getTyvars.snd) body
         context' <- bindKindVar env' context
-        param' <- mapM (getKindVar env'.fst) param
+        param' <- mapM (fmap (map2 numToVarKind).getKindVar env'.fst) param
         body' <- mapM (mapM2 (bindKindVar env')) body
         return $ DataDecl context' name param' body'
     bindKindVar env (TypeDecl name param typename) = do
         env' <- addKindVarEnv env $ map fst param++getTyvars typename
-        param' <- mapM (getKindVar env'.fst) param
+        param' <- mapM (fmap (map2 numToVarKind).getKindVar env'.fst) param
         typename' <- bindKindVar env' typename
         return $ TypeDecl name param' typename'
     bindKindVar env (ClassDecl context name param body) = do
         env' <- addKindVarEnv env $ fst param:getTyvars context
         context' <- bindKindVar env' context
-        param' <- getKindVar env' $ fst param
+        param' <- map2 numToVarKind <$> (getKindVar env' $ fst param)
         body' <- bindKindVar env' body
         return $ ClassDecl context' name param' body'
     bindKindVar env (InstanceDecl context name param body) = do
@@ -132,15 +135,15 @@ instance BindKindVar PrimPatternMatch where
     bindKindVar _ (ListPattern pat) = ListPattern <$> mapM bindKindVar' pat
     bindKindVar _ (BindPattern name pat) = BindPattern name <$> bindKindVar' pat
     bindKindVar _ (ParenthesesPattern pat) = ParenthesesPattern <$> bindKindVar' pat
-    bindKindVar _ (PatternWithType pat typename) = do
+    bindKindVar _ (TypeSignaturePattern pat typename) = do
         env <- addKindVarEnv [] $ getTyvars typename
-        liftM2 PatternWithType (bindKindVar' pat) (bindKindVar env typename)
+        liftM2 TypeSignaturePattern (bindKindVar' pat) (bindKindVar env typename)
     --bindKindVar _ pat@WildCardPattern = return pat
     bindKindVar _ pat = return pat
 
-instance BindKindVar DataTypeWithContext where
-    bindKindVar env (DataTypeWithContext pos context typename) =
-        liftM2 (DataTypeWithContext pos) (bindKindVar env context) (bindKindVar env typename)
+instance BindKindVar QualDataType where
+    bindKindVar env (QualDataType pos context typename) =
+        liftM2 (QualDataType pos) (bindKindVar env context) (bindKindVar env typename)
 
 instance BindKindVar TypeContext where
     bindKindVar env (TypeContext typeclass typename _) =
@@ -165,8 +168,8 @@ class HasTyvars a where
 instance HasTyvars a => HasTyvars [a] where
     getTyvars = concatMap getTyvars
 
-instance HasTyvars DataTypeWithContext where
-    getTyvars (DataTypeWithContext _ context typename) = getTyvars context++getTyvars typename
+instance HasTyvars QualDataType where
+    getTyvars (QualDataType _ context typename) = getTyvars context++getTyvars typename
 
 instance HasTyvars TypeContext where
     getTyvars (TypeContext _ v _) = [v]

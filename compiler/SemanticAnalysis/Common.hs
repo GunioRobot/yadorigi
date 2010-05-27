@@ -42,6 +42,6 @@ primPatternToNames (NegativePattern pat) = patternToNames pat
 primPatternToNames (ListPattern pats) = concatMap patternToNames pats
 primPatternToNames (BindPattern str pat) = str:maybe [] patternToNames pat
 primPatternToNames (ParenthesesPattern pat) = patternToNames pat
-primPatternToNames (PatternWithType pat _) = patternToNames pat
+primPatternToNames (TypeSignaturePattern pat _) = patternToNames pat
 --primPatternToNames WildCardPattern = []
 primPatternToNames _ = []

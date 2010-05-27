@@ -53,12 +53,12 @@ instance Show Decl where
     show (Decl _ scope decl) = "#"++show scope++"# "++show decl
 
 data PrimDecl
-    = DataDecl [TypeContext] String [(String,Int)] [(String,[DataType])]
-    | TypeDecl String [(String,Int)] DataTypeWithContext
-    | ClassDecl [TypeContext] String (String,Int) [Decl]
+    = DataDecl [TypeContext] String [(String,Kind)] [(String,[DataType])]
+    | TypeDecl String [(String,Kind)] QualDataType
+    | ClassDecl [TypeContext] String (String,Kind) [Decl]
     | InstanceDecl [TypeContext] ScopedName DataType [Decl]
     | FixityDecl Fixity (Maybe Int) [String]
-    | TypeSignatureDecl String DataTypeWithContext
+    | TypeSignatureDecl String QualDataType
     | BindDecl Bind [Decl]
 
 instance Show PrimDecl where
@@ -127,7 +127,7 @@ data PrimExpr
     | LetExpr Int [(Position,PrimDecl)] Expr {- let expression -}
     | IfExpr Expr Expr Expr {- if expression -}
     | CaseExpr Expr [CasePattern] {- case Expression -}
-    | TypeSignatureExpr Expr DataTypeWithContext {- expression with data type information -}
+    | TypeSignatureExpr Expr QualDataType {- expression with data type information -}
 
 instance Show PrimExpr where
     show (LiteralExpr literal) = show literal
@@ -170,7 +170,7 @@ data PrimPatternMatch
     | ListPattern [PatternMatch] {- list pattern -}
     | BindPattern String (Maybe PatternMatch) {- bind pattern, as pattern -}
     | ParenthesesPattern PatternMatch {- Parentheses Pattern -}
-    | PatternWithType PatternMatch DataTypeWithContext {- pattern with data type information -}
+    | TypeSignaturePattern PatternMatch QualDataType {- pattern with data type information -}
     | WildCardPattern {- wild card pattern -}
 
 instance Show PrimPatternMatch where
@@ -181,15 +181,15 @@ instance Show PrimPatternMatch where
     show (ListPattern pat) = show pat
     show (BindPattern str pat) = "("++str++maybe "" (("@"++).show) pat++")"
     show (ParenthesesPattern pat) = "("++show pat++")"
-    show (PatternWithType pat typename) = "("++show pat++show typename++")"
+    show (TypeSignaturePattern pat typename) = "("++show pat++show typename++")"
     show WildCardPattern = "_"
 
 -- Data Type
 
-data DataTypeWithContext = DataTypeWithContext Position [TypeContext] DataType
+data QualDataType = QualDataType Position [TypeContext] DataType
 
-instance Show DataTypeWithContext where
-    show (DataTypeWithContext _ context typename) = showContext context++show typename
+instance Show QualDataType where
+    show (QualDataType _ context typename) = showContext context++show typename
 
 data TypeContext = TypeContext ScopedName String Int
 

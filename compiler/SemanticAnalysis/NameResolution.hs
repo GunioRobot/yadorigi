@@ -177,14 +177,14 @@ instance NameResolution PrimPatternMatch where
     nameResolution (ListPattern pats) = ListPattern <$> nameResolution pats
     nameResolution (BindPattern str pat) = BindPattern str <$> nameResolution pat
     nameResolution (ParenthesesPattern pat) = ParenthesesPattern <$> nameResolution pat
-    nameResolution (PatternWithType pat typename) =
-        liftM2 PatternWithType (nameResolution pat) (nameResolution typename)
+    nameResolution (TypeSignaturePattern pat typename) =
+        liftM2 TypeSignaturePattern (nameResolution pat) (nameResolution typename)
     --nameResolution pat@WildCardPattern = return pat
     nameResolution pat = return pat
 
-instance NameResolution DataTypeWithContext where
-    nameResolution (DataTypeWithContext pos context typename) =
-        liftM2 (DataTypeWithContext pos) (nameResolution context) (nameResolution typename)
+instance NameResolution QualDataType where
+    nameResolution (QualDataType pos context typename) =
+        liftM2 (QualDataType pos) (nameResolution context) (nameResolution typename)
 
 instance NameResolution TypeContext where
     nameResolution (TypeContext cls instanceName instanceNum) =
