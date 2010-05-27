@@ -597,7 +597,7 @@ qualTypeParser layout = liftM3 QualDataType
 
 contextParser :: LayoutInfo -> Parsec TokenStream u [TypeContext]
 contextParser layout = option [] $ try $
-        (layoutParentheses (\l -> sepBy1 (oneContext l) (reservedToken "," l)) layout <|>
+        (layoutParentheses (layoutSepBy1 oneContext (reservedToken ",")) layout <|>
         ((:[]) <$> oneContext layout)) <* reservedToken "=>" (tailElemLayout layout)
     where
         oneContext layout = liftM3 TypeContext
