@@ -36,7 +36,8 @@ referModule modules =
 genModuleInfo :: Module -> Either ImportError ModuleInfo
 genModuleInfo (Module modname exports imports body) = do
     insideNames <- return $ nub [((modname',name),modname) |
-        name <- concatMap declToName body, modname' <- [[],modname]]
+        name <- map (\(ScopedName _ _ str) -> str) $ concatMap declToName body,
+        modname' <- [[],modname]]
     insideTypes <- return $ nub [((modname',name),children,modname) |
         (name,children) <- concatMap declToTypeName body, modname' <- [[],modname]]
     outsideNames <- filterByExportList modname exports insideNames

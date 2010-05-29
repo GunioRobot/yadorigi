@@ -5,20 +5,22 @@ module Yadorigi.SemanticAnalysis.NameResolution where
 
 import Prelude hiding (mapM, sequence)
 import Data.Functor
+import Data.Function
 import Data.Traversable
 import Data.Tuple.All
 import Control.Monad.Reader hiding (mapM, sequence)
 
 import Yadorigi.Monad.Either
 import Yadorigi.Syntax
+import Yadorigi.SemanticAnalysis.DataTypes
 import Yadorigi.SemanticAnalysis.Common
 import Yadorigi.SemanticAnalysis.ReferModule
 
 data NameResolutionError = NameResolutionError deriving Show
 
-type Scope = (ModuleName,[Int])
 type GNameEnv = (ModuleName,ModuleName,String) -- Global Name Environment
-type LNameEnv = (ModuleName,[Int],String) -- Local Name Environment
+type LNameEnv = ScopedName -- Local Name Environment
+type NLState = ([GNameEnv],[GNameEnv],[LNameEnv])
 
 nameResolutionModule ::
     (Module,ModuleName,[NameInfo NameWithModule],[TypeNameInfo NameWithModule]) ->
@@ -27,61 +29,55 @@ nameResolutionModule (mod,modname,names,types) =
     let names' = [(modname,smodname,name) | ((modname,name),smodname) <- names]++
             [(modname,smodname,name) | ((modname,_),children,smodname) <- types, name <- children]
         gnames = [name | name <- names', sel1 name == []]
-        lnames = [(smodname,[],name) | (modname,smodname,name) <- names', null $ modname]
+        lnames = [(ScopedName smodname [] name) | (modname,smodname,name) <- names', null $ modname]
         types' = [(modname,smodname,name) | ((modname,name),_,smodname) <- types] in
-            nameResolution' ((modname,[]),gnames,types',lnames) mod
+            nameResolution' (gnames,types',lnames) mod
 
-overwriteNameEnv :: Scope -> [LNameEnv] -> [String] -> [LNameEnv]
-overwriteNameEnv (modname,scope) list names = foldl overwriteIter list names
+rewriteNameEnv :: [LNameEnv] -> [LNameEnv] -> [LNameEnv]
+rewriteNameEnv list names = foldl rewriteIter list names
     where
-        overwriteIter :: [LNameEnv] -> String -> [LNameEnv]
-        overwriteIter list name = (modname,scope,name):filter ((name/=).sel3) list
+        rewriteIter :: [LNameEnv] -> LNameEnv -> [LNameEnv]
+        rewriteIter list name = name:filter (on (/=) (\(ScopedName _ _ s) -> s) name) list
 
-typeNameResolution :: ScopedName ->
-    ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) ScopedName
+typeNameResolution :: ScopedName -> ReaderT NLState (Either NameResolutionError) ScopedName
 typeNameResolution (ScopedName modname _ name) = do
-    (_,tnameEnv,_,_) <- ask
+    (tnameEnv,_,_) <- ask
     case [n | n <- tnameEnv, modname == sel1 n, name == sel3 n] of
         [n] -> return $ ScopedName (sel2 n) [] name
         _ -> lift $ Left NameResolutionError
 
-varNameResolution :: ScopedName ->
-    ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) ScopedName
-varNameResolution (ScopedName modname _ name) = do
-    (_,_,gnameEnv,lnameEnv) <- ask
-    let lsearch = case [n | n <- lnameEnv, name == sel3 n] of
-            [(modname',scope,_)] -> return $ ScopedName modname' scope name
+varNameResolution :: ScopedName -> ReaderT NLState (Either NameResolutionError) ScopedName
+varNameResolution name@(ScopedName modname _ str) = do
+    (_,gnameEnv,lnameEnv) <- ask
+    let lsearch = case filter (on (==) (\(ScopedName _ _ s) -> s) name) lnameEnv of
+            [ScopedName modname' scope _] -> return $ ScopedName modname' scope str
             _ -> Left NameResolutionError
-        gsearch = case [n | n <- gnameEnv, modname == sel1 n, name == sel3 n] of
-            [n] -> return $ ScopedName (sel2 n) [] name
+        gsearch = case [n | n <- gnameEnv, modname == sel1 n, str == sel3 n] of
+            [(_,smodname,_)] -> return $ ScopedName smodname [] str
             _ -> Left NameResolutionError
     lift (if null modname then lsearch else gsearch)
 
 class NameResolution a where
-    nameResolution ::
-        a -> ReaderT (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) (Either NameResolutionError) a
-    nameResolution' :: (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) -> a -> Either NameResolutionError a
+    nameResolution :: a -> ReaderT NLState (Either NameResolutionError) a
+    nameResolution' :: NLState -> a -> Either NameResolutionError a
     nameResolution' st a = runReaderT (nameResolution a) st
-    nameResolutionT :: MonadTrans t =>
-        (Scope,[GNameEnv],[GNameEnv],[LNameEnv]) -> a -> t (Either NameResolutionError) a
+    nameResolutionT :: MonadTrans t => NLState -> a -> t (Either NameResolutionError) a
     nameResolutionT st a = lift $ runReaderT (nameResolution a) st
 
 instance (Traversable f,NameResolution a) => NameResolution (f a) where
     nameResolution = mapM nameResolution
 
-instance NameResolution Decl where
-    nameResolution (Decl pos scopeNum decl) = do
-        env@((modname,scope),_,_,_) <- ask
-        Decl pos scopeNum <$> nameResolutionT (upd1 (modname,scope++[scopeNum]) env) decl
-
 instance NameResolution Module where
     nameResolution (Module modname exports imports decls) =
         Module modname exports imports <$> nameResolution decls
 
+instance NameResolution Decl where
+    nameResolution (Decl pos decl) = Decl pos <$> nameResolution decl
+
 instance NameResolution PrimDecl where
     nameResolution (DataDecl context name param body) = do
         context' <- nameResolution context
-        body' <- mapM (\(c,p) -> nameResolution p >>= \p' -> return (c,p')) body
+        body' <- mapM (\(c,p) -> (,) c <$> nameResolution p) body
         return $ DataDecl context' name param body'
     nameResolution (TypeDecl name param typeName) = TypeDecl name param <$> nameResolution typeName
     nameResolution (ClassDecl context name param decls) = do
@@ -93,14 +89,13 @@ instance NameResolution PrimDecl where
         decls' <- nameResolution decls
         return $ InstanceDecl context name' typeName decls'
     --nameResolution decl@(FixityDecl _ _ _) = return decl
-    nameResolution (TypeSignatureDecl name typeName) =
-        TypeSignatureDecl name <$> nameResolution typeName
-    nameResolution (BindDecl bind@(Bind lhs _) whereClause) = do
-        (scope,tnameEnv,gnameEnv,lnameEnv) <- ask
-        let lnameEnv' = overwriteNameEnv scope lnameEnv
-                (lhsToIName lhs++concatMap declToName whereClause)
-            newSt = (scope,tnameEnv,gnameEnv,lnameEnv')
-        liftM2 BindDecl (nameResolutionT newSt bind) (nameResolutionT newSt whereClause)
+    nameResolution (TypeSignatureDecl names typeName) =
+        TypeSignatureDecl names <$> nameResolution typeName
+    nameResolution (BindDecl scopeNum bind@(Bind lhs _) whereClause) = do
+        (tnameEnv,gnameEnv,lnameEnv) <- ask
+        let lnameEnv' = rewriteNameEnv lnameEnv $ lhsToIName lhs++concatMap declToName whereClause
+            newSt = (tnameEnv,gnameEnv,lnameEnv')
+        liftM2 (BindDecl scopeNum) (nameResolutionT newSt bind) (nameResolutionT newSt whereClause)
     nameResolution decl = return decl
 
 instance NameResolution Bind where
@@ -134,12 +129,10 @@ instance NameResolution PrimExpr where
     nameResolution (ListExpr expr) = ListExpr <$> nameResolution expr
     nameResolution (LambdaExpr lambdas) = LambdaExpr <$> nameResolution lambdas
     nameResolution (LetExpr scopeNum lets expr) = do
-        ((modname,scope),tnameEnv,gnameEnv,lnameEnv) <- ask
-        let newScope = (modname,scope++[scopeNum])
-            lnameEnv' = overwriteNameEnv newScope lnameEnv (concatMap (primDeclToName.snd) lets)
-            newSt = (newScope,tnameEnv,gnameEnv,lnameEnv')
-        liftM2 (LetExpr scopeNum)
-            (mapM (\(p,d) -> (,) p <$> nameResolutionT newSt d) lets) (nameResolutionT newSt expr)
+        (tnameEnv,gnameEnv,lnameEnv) <- ask
+        let lnameEnv' = rewriteNameEnv lnameEnv (concatMap declToName lets)
+            newSt = (tnameEnv,gnameEnv,lnameEnv')
+        liftM2 (LetExpr scopeNum) (nameResolutionT newSt lets) (nameResolutionT newSt expr)
     nameResolution (IfExpr cond expr1 expr2) =
         liftM3 IfExpr (nameResolution cond) (nameResolution expr1) (nameResolution expr2)
     nameResolution (CaseExpr expr pats) =
@@ -150,18 +143,16 @@ instance NameResolution PrimExpr where
 
 instance NameResolution Lambda where
     nameResolution (Lambda pos scopeNum params expr) = do
-        ((modname,scope),tnameEnv,gnameEnv,lnameEnv) <- ask
-        let newScope = (modname,scope++[scopeNum])
-            lnameEnv' = overwriteNameEnv newScope lnameEnv (concatMap patternToNames params)
-            newSt = (newScope,tnameEnv,gnameEnv,lnameEnv')
+        (tnameEnv,gnameEnv,lnameEnv) <- ask
+        let lnameEnv' = rewriteNameEnv lnameEnv (concatMap patternToNames params)
+            newSt = (tnameEnv,gnameEnv,lnameEnv')
         liftM2 (Lambda pos scopeNum) (nameResolutionT newSt params) (nameResolutionT newSt expr)
 
 instance NameResolution CasePattern where
     nameResolution (CasePattern scopeNum pat expr) = do
-        ((modname,scope),tnameEnv,gnameEnv,lnameEnv) <- ask
-        let newScope = (modname,scope++[scopeNum])
-            lnameEnv' = overwriteNameEnv newScope lnameEnv (patternToNames pat)
-            newSt = (newScope,tnameEnv,gnameEnv,lnameEnv')
+        (tnameEnv,gnameEnv,lnameEnv) <- ask
+        let lnameEnv' = rewriteNameEnv lnameEnv (patternToNames pat)
+            newSt = (tnameEnv,gnameEnv,lnameEnv')
         liftM2 (CasePattern scopeNum) (nameResolutionT newSt pat) (nameResolutionT newSt expr)
 
 instance NameResolution PatternMatch where

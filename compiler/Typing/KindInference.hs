@@ -3,11 +3,6 @@
 
 module Yadorigi.Typing.KindInference where
 
-import Yadorigi.Monad.Either
-import Yadorigi.Monad.State
-import Yadorigi.Data.Tuple.Map
-import Yadorigi.Syntax
-
 import Prelude hiding (foldl, foldl1, foldr, foldr1, mapM, mapM_, sequence, sequence_,
     concat, concatMap, and, or, any, all, sum, product, maximum, minimum, elem, notElem)
 import Data.List hiding (concatMap, elem, notElem)
@@ -18,6 +13,11 @@ import Data.Traversable
 import qualified Data.IntMap as IM
 import Data.Tuple.All
 import Control.Monad.State.Lazy hiding (mapM, mapM_, sequence, sequence_)
+
+import Yadorigi.Monad.Either
+import Yadorigi.Monad.State
+import Yadorigi.Data.Tuple.Map
+import Yadorigi.Syntax
 
 data KindInferenceError = KindInferenceError deriving Show
 

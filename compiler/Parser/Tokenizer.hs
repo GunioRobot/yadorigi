@@ -1,14 +1,14 @@
 
 module Yadorigi.Parser.Tokenizer (tokenizer) where
 
-import Yadorigi.Syntax
-import Yadorigi.Parser.DataTypes
-
 import Data.Char
 import Data.Maybe
 import Data.Functor
 import Control.Monad
 import Text.Parsec
+
+import Yadorigi.Syntax
+import Yadorigi.Parser.DataTypes
 
 -- Constant Values
 

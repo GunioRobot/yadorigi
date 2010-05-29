@@ -1,12 +1,12 @@
 
 module Yadorigi.Parser.Test where
 
+import Control.Monad
+import Text.Parsec
+
 import Yadorigi.Syntax
 import Yadorigi.Parser.Parser
 import Yadorigi.Parser.Tokenizer
-
-import Text.Parsec
-import Control.Monad
 
 -- Parser Tester
 

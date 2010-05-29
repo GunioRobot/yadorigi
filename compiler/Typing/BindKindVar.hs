@@ -3,11 +3,6 @@
 
 module Yadorigi.Typing.BindKindVar where
 
-import Yadorigi.Monad.Either
-import Yadorigi.Data.Tuple.Map
-import Yadorigi.Syntax
-import Yadorigi.Typing.KindInference
-
 import Prelude hiding (foldl, foldl1, foldr, foldr1, mapM, mapM_, sequence, sequence_,
     concat, concatMap, and, or, any, all, sum, product, maximum, minimum, elem, notElem)
 import Data.List hiding (concatMap, elem, notElem)
@@ -17,6 +12,11 @@ import Data.Traversable
 import qualified Data.IntMap as IM
 import Control.Monad hiding (mapM, mapM_, sequence, sequence_)
 import Control.Monad.Trans
+
+import Yadorigi.Monad.Either
+import Yadorigi.Data.Tuple.Map
+import Yadorigi.Syntax
+import Yadorigi.Typing.KindInference
 
 addKindVarEnv :: [(String,Int)] -> [String] -> KindInferenceMonad [(String,Int)]
 addKindVarEnv env newVars = foldlM addKindVarEnv' env (nub $ newVars \\ map fst env) where

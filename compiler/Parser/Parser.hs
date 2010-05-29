@@ -1,15 +1,15 @@
 
 module Yadorigi.Parser.Parser where
 
-import Yadorigi.Common
-import Yadorigi.Syntax
-import Yadorigi.Parser.DataTypes
-import Yadorigi.Data.Function.Compose
-
 import Data.Char
 import Control.Applicative ((<$>),(<$),(<*),(*>),(<*>),(<**>))
 import Control.Monad
 import Text.Parsec
+
+import Yadorigi.Common
+import Yadorigi.Syntax
+import Yadorigi.Parser.DataTypes
+import Yadorigi.Data.Function.Compose
 
 -- Data Types
 
@@ -247,13 +247,11 @@ moduleParser :: Parsec TokenStream u Module
 moduleParser = do
     let layout = Right 1
     let tlayout = tailElemLayout layout
-    (modname,exportList) <- option ([],Nothing) $ do
-        reservedToken "module" layout
-        modname <- option [] $ moduleNameParser tlayout
-        exportList <- option Nothing $ Just <$>
-            (layoutParentheses (\l -> sepBy (exportEntityParser l) (reservedToken "," l)) tlayout)
-        reservedToken "where" tlayout
-        return (modname,exportList)
+    reservedToken "module" layout
+    modname <- option [] $ moduleNameParser tlayout
+    exportList <- option Nothing $ Just <$>
+        (layoutParentheses (\l -> sepBy (exportEntityParser l) (reservedToken "," l)) tlayout)
+    reservedToken "where" tlayout
     imports <- offsideRuleMany importParser layout
     topDecls <- offsideRuleMany topDeclParser layout
     eof
@@ -303,12 +301,12 @@ importParser layout = do
 -- Declaration Parser
 
 topDeclParser :: LayoutInfo -> Parsec TokenStream u Decl
-topDeclParser layout = liftM3 Decl getPos (return 0) (layoutChoice [dataDeclParser,typeDeclParser,
+topDeclParser layout = liftM2 Decl getPos (layoutChoice [dataDeclParser,typeDeclParser,
     classDeclParser,instanceDeclParser,fixityDeclParser,typeSignatureParser,bindDeclParser] layout)
 
 declParser :: LayoutInfo -> Parsec TokenStream u Decl
-declParser layout = liftM3 Decl getPos (return 0)
-    (layoutChoice [fixityDeclParser,typeSignatureParser,bindDeclParser] layout)
+declParser layout =
+    liftM2 Decl getPos (layoutChoice [fixityDeclParser,typeSignatureParser,bindDeclParser] layout)
 
 dataDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 dataDeclParser layout = do
@@ -338,7 +336,7 @@ classDeclParser layout = do
     let tlayout = tailElemLayout layout
     reservedToken "class" layout
     context <- contextParser tlayout
-    className <- unscopedcNameToken tlayout
+    className <- ScopedName [] [] <$> unscopedcNameToken tlayout
     param <- unscopedvNameToken tlayout
     body <- option [] $ reservedToken "where" tlayout >> offsideRuleMany declParser tlayout
     return $ ClassDecl context className (param,undefined) body
@@ -378,11 +376,11 @@ typeSignatureParser layout = try $ do
 
 bindDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 bindDeclParser layout = try $ let tlayout = tailElemLayout layout in
-    liftM2 BindDecl (bindParser "=" layout)
+    liftM2 (BindDecl 0) (bindParser "=" layout)
         (option [] $ reservedToken "where" tlayout >> offsideRuleMany declParser tlayout)
 
 simpleBindDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
-simpleBindDeclParser layout = try $ flip BindDecl [] <$> (bindParser "=" layout)
+simpleBindDeclParser layout = try $ flip (BindDecl 0) [] <$> bindParser "=" layout
 
 -- Left/Right Hand Side Parser, Bind Parser
 
@@ -475,8 +473,8 @@ letParser layout = do
     expr <- exprParser 0 tlayout
     return $ LetExpr 0 list expr
 
-letDeclParser :: LayoutInfo -> Parsec TokenStream u (Position,PrimDecl)
-letDeclParser layout = liftM2 (,) getPos
+letDeclParser :: LayoutInfo -> Parsec TokenStream u Decl
+letDeclParser layout = liftM2 Decl getPos
     (layoutChoice [fixityDeclParser,typeSignatureParser,simpleBindDeclParser] layout)
 
 ifParser :: LayoutInfo -> Parsec TokenStream u PrimExpr
