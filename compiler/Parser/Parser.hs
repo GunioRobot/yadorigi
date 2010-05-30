@@ -4,6 +4,7 @@ module Yadorigi.Parser.Parser where
 import Data.Char
 import Control.Applicative ((<$>),(<$),(<*),(*>),(<*>),(<**>))
 import Control.Monad
+import Control.Arrow
 import Text.Parsec
 
 import Yadorigi.Common
@@ -18,7 +19,7 @@ type LayoutInfo = Either Int Int
 -- Position
 
 getPos :: Parsec s u Position
-getPos = (\p -> (sourceLine p,sourceColumn p)) <$> getPosition
+getPos = (sourceLine &&& sourceColumn) <$> getPosition
 
 testPos :: LayoutInfo -> Position -> Parsec s u ()
 testPos layout pos | checkLayout layout pos = return ()
@@ -82,7 +83,7 @@ vNameToken :: LayoutInfo -> Parsec TokenStream u ScopedName
 vNameToken = getToken f
     where
         f (NameToken name@(ScopedName _ _ str))
-            | isLower (head str) || '_' == (head str) = Just name
+            | isLower (head str) || '_' == head str = Just name
         f _ = Nothing
 
 unscopedNameToken :: LayoutInfo -> Parsec TokenStream u String
@@ -100,7 +101,7 @@ unscopedcNameToken = getToken f
 unscopedvNameToken :: LayoutInfo -> Parsec TokenStream u String
 unscopedvNameToken = getToken f
     where
-        f (NameToken (ScopedName [] _ str)) | isLower (head str) || '_' == (head str) = Just str
+        f (NameToken (ScopedName [] _ str)) | isLower (head str) || '_' == head str = Just str
         f _ = Nothing
 
 fixedNameToken :: String -> LayoutInfo -> Parsec TokenStream u ScopedName
@@ -241,6 +242,9 @@ layoutSepBy1 :: (LayoutInfo -> Parsec [s] u a) ->
 layoutSepBy1 parser sep layout = let tlayout = tailElemLayout layout in
     liftM2 (:) (parser layout) (many (sep tlayout *> parser tlayout))
 
+parseMaybe :: Stream s m t => ParsecT s u m a -> ParsecT s u m (Maybe a)
+parseMaybe p = option Nothing $ Just <$> p
+
 -- Module Parser
 
 moduleParser :: Parsec TokenStream u Module
@@ -249,8 +253,8 @@ moduleParser = do
     let tlayout = tailElemLayout layout
     reservedToken "module" layout
     modname <- option [] $ moduleNameParser tlayout
-    exportList <- option Nothing $ Just <$>
-        (layoutParentheses (\l -> sepBy (exportEntityParser l) (reservedToken "," l)) tlayout)
+    exportList <- parseMaybe $
+        layoutParentheses (\l -> sepBy (exportEntityParser l) (reservedToken "," l)) tlayout
     reservedToken "where" tlayout
     imports <- offsideRuleMany importParser layout
     topDecls <- offsideRuleMany topDeclParser layout
@@ -261,10 +265,10 @@ moduleParser = do
         nameExportEntityParser layout = do
             let tlayout = tailElemLayout layout
             entity <- nameParser layout
-            children <- (try $ layoutParentheses
+            children <- try (layoutParentheses
                 (\l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) tlayout) <|>
-                (try $ layoutParentheses (\l -> Nothing <$ fixedOpToken ".." l) tlayout) <|>
-                (return $ Just [])
+                try (layoutParentheses (\l -> Nothing <$ fixedOpToken ".." l) tlayout) <|>
+                return (Just [])
             return $ NameExportEntity entity children
         moduleExportEntityParser :: LayoutInfo -> Parsec TokenStream u ExportEntity
         moduleExportEntityParser layout = do
@@ -280,7 +284,7 @@ importParser layout = do
     reservedToken "import" layout
     qualified <- option False $ fixedNameToken "qualified" tlayout >> return True
     modname <- moduleNameParser tlayout
-    alias <- option Nothing $ Just <$> (fixedNameToken "as" tlayout >> moduleNameParser tlayout)
+    alias <- parseMaybe $ fixedNameToken "as" tlayout >> moduleNameParser tlayout
     importList <- option Nothing $ do
         hiding <- option False $ fixedNameToken "hiding" tlayout >> return True
         importList <-
@@ -292,10 +296,10 @@ importParser layout = do
         importEntityParser layout = do
             let tlayout = tailElemLayout layout
             entity <- unscopedNameParser layout
-            children <- (try $ layoutParentheses
+            children <- try (layoutParentheses
                 (\l -> Just <$> sepBy (unscopedNameParser l) (reservedToken "," l)) tlayout) <|>
-                (try $ layoutParentheses (\l -> Nothing <$ fixedOpToken ".." l) tlayout) <|>
-                (return $ Just [])
+                try (layoutParentheses (\l -> Nothing <$ fixedOpToken ".." l) tlayout) <|>
+                return (Just [])
             return $ ImportEntity entity children
 
 -- Declaration Parser
@@ -354,7 +358,7 @@ instanceDeclParser layout = do
 fixityDeclParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
 fixityDeclParser layout = do
     fixity <- fixityParser
-    num <- option Nothing (Just <$> operatorLevelParser)
+    num <- parseMaybe operatorLevelParser
     ops <- layoutSepBy1 (ScopedName [] [] <.> unscopedOpParser) (reservedToken ",") tlayout
     return $ FixityDecl fixity num ops
     where
@@ -363,7 +367,7 @@ fixityDeclParser layout = do
             (reservedToken "infix" layout >> return Infix) <|>
             (reservedToken "infixr" layout >> return Infixr)
         operatorLevelParser = getToken operatorLevelTest tlayout <?> "valid precedence"
-        operatorLevelTest (LiteralToken (LiteralInt num)) | (0 <= num && num <= 9) = Just num
+        operatorLevelTest (LiteralToken (LiteralInt num)) | 0 <= num && num <= 9 = Just num
         operatorLevelTest _ = Nothing
 
 typeSignatureParser :: LayoutInfo -> Parsec TokenStream u PrimDecl
@@ -574,8 +578,8 @@ asPatternParser layout = do
     var <- unscopedvNameParser layout
     if var == "_"
         then return WildCardPattern
-        else BindPattern (ScopedName [] [] var) <$> (option Nothing $
-            Just <$> (reservedToken "@" tlayout >> patternParser 4 tlayout))
+        else BindPattern (ScopedName [] [] var) <$>
+            parseMaybe (reservedToken "@" tlayout >> patternParser 4 tlayout)
 
 singleDCPatternParser :: LayoutInfo -> Parsec TokenStream u PrimPatternMatch
 singleDCPatternParser layout = flip DCPattern [] <$> cNameParser layout

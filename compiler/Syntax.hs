@@ -265,7 +265,7 @@ showLayoutList = unlines.map ("    "++).concatMap (lines.show)
 showContext :: [TypeContext] -> String
 showContext [] = ""
 showContext [context] = show context++" => "
-showContext context = "("++(intercalate "," (map show context))++") => "
+showContext context = "("++intercalate "," (map show context)++") => "
 
 showModuleName :: ModuleName -> String
 showModuleName = intercalate "."

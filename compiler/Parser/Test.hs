@@ -16,7 +16,7 @@ main = do
     let tokenizerResult = runParser tokenizer () "<interactive>" contents
     case tokenizerResult of
         (Right ts) -> do
-            mapM print ts
+            mapM_ print ts
             either print print (runParser moduleParser () "<tokenStream>" ts)
         (Left error) -> print error
 

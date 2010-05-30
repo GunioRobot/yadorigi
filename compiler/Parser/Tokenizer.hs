@@ -43,7 +43,7 @@ blockComment :: Parsec String u ()
 blockComment = try $ () <$ (string "{-" >> manyTill anyChar (try (string "-}")))
 
 spacesAndComments :: Parsec String u ()
-spacesAndComments = (skipMany $ (() <$ space) <|> lineComment <|> blockComment) <?> "comment"
+spacesAndComments = skipMany (() <$ space <|> lineComment <|> blockComment) <?> "comment"
 
 -- Literal
 
@@ -63,11 +63,11 @@ decTokenizer = do
 
 octTokenizer :: Parsec String u Literal
 octTokenizer = (char 'o' <|> char 'O') >>
-    (LiteralInt . foldl (\i c -> (digitToInt c)+i*8) 0 <$> many1 octDigit)
+    (LiteralInt . foldl (\i c -> digitToInt c+i*8) 0 <$> many1 octDigit)
 
 hexTokenizer :: Parsec String u Literal
 hexTokenizer = (char 'x' <|> char 'X') >>
-    (LiteralInt . foldl (\i c -> (digitToInt c)+i*16) 0 <$> many1 hexDigit)
+    (LiteralInt . foldl (\i c -> digitToInt c+i*16) 0 <$> many1 hexDigit)
 
 strElem :: Parsec String u Char
 strElem = noneOf "\\\"\'" <|> liftM2 (\bs -> conv.(`const` bs)) (char '\\') (oneOf "abfnrtv\\\"\'")

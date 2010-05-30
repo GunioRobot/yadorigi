@@ -29,7 +29,7 @@ nameResolutionModule (mod,modname,names,types) =
     let names' = [(modname,smodname,name) | ((modname,name),smodname) <- names]++
             [(modname,smodname,name) | ((modname,_),children,smodname) <- types, name <- children]
         gnames = [name | name <- names', sel1 name == []]
-        lnames = [(ScopedName smodname [] name) | (modname,smodname,name) <- names', null $ modname]
+        lnames = [ScopedName smodname [] name | (modname,smodname,name) <- names', null modname]
         types' = [(modname,smodname,name) | ((modname,name),_,smodname) <- types] in
             nameResolution' (gnames,types',lnames) mod
 

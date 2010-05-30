@@ -35,11 +35,11 @@ referModule modules =
 
 genModuleInfo :: Module -> Either ImportError ModuleInfo
 genModuleInfo (Module modname exports imports body) = do
-    insideNames <- return $ nub [((modname',name),modname) |
-        name <- map (\(ScopedName _ _ str) -> str) $ concatMap declToName body,
-        modname' <- [[],modname]]
-    insideTypes <- return $ nub [((modname',name),children,modname) |
-        (name,children) <- concatMap declToTypeName body, modname' <- [[],modname]]
+    let insideNames = nub [((modname',name),modname) |
+            name <- map (\(ScopedName _ _ str) -> str) $ concatMap declToName body,
+            modname' <- [[],modname]]
+        insideTypes = nub [((modname',name),children,modname) |
+            (name,children) <- concatMap declToTypeName body, modname' <- [[],modname]]
     outsideNames <- filterByExportList modname exports insideNames
     outsideTypes <- typeFilterByExportList modname exports insideTypes
     return (modname,exports,imports,(outsideNames,outsideTypes),(insideNames,insideTypes))
@@ -87,7 +87,7 @@ filterByExportList modname exports names =
     where
         filterByExport :: ExportEntity -> Either ImportError [NameInfo String]
         filterByExport (ModuleExportEntity modname') =
-            return $ [(name,smodname) | ((modname'',name),smodname) <- names, modname' == modname'']
+            return [(name,smodname) | ((modname'',name),smodname) <- names, modname' == modname'']
         filterByExport (NameExportEntity (ScopedName modname' _ name) (Just [])) =
             case nub [snd n | n <- names, elem modname' [fst $ fst n,[]], name == snd (fst n)] of
                 [] -> return []
@@ -109,7 +109,7 @@ typeFilterByExportList modname exports names =
                     n <- names, elem modname' [fst $ sel1 n,[]], name == snd (sel1 n)] of
                 [] -> return []
                 [(children,smodname)] -> do
-                    let children' = fromMaybe [] (filter (flip notElem children) <$> exportChildren)
+                    let children' = fromMaybe [] (filter (`notElem` children) <$> exportChildren)
                     if null children'
                         then return [(name,fromMaybe children exportChildren,smodname)]
                         else Left $ ExportChildNotFound modname (modname',name) children'

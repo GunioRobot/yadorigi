@@ -19,7 +19,7 @@ import Yadorigi.Syntax
 import Yadorigi.Typing.KindInference
 
 addKindVarEnv :: [(String,Int)] -> [String] -> KindInferenceMonad [(String,Int)]
-addKindVarEnv env newVars = foldlM addKindVarEnv' env (nub $ newVars \\ map fst env) where
+addKindVarEnv env newVars = foldlM addKindVarEnv' env $ nub $ newVars \\ map fst env where
     addKindVarEnv' :: [(String,Int)] -> String -> KindInferenceMonad [(String,Int)]
     addKindVarEnv' env n = (:env) <$> (,) n <$> newKindVar
 
@@ -35,7 +35,7 @@ class BindKindVar a where
     bindKindVar' = bindKindVar []
 
 instance (Traversable f,BindKindVar a) => BindKindVar (f a) where
-    bindKindVar env l = mapM (bindKindVar env) l
+    bindKindVar env = mapM $ bindKindVar env
 
 instance BindKindVar Module where
     bindKindVar env (Module modname exports imports decls) =
@@ -59,7 +59,7 @@ instance BindKindVar PrimDecl where
     bindKindVar env (ClassDecl context name param body) = do
         env' <- addKindVarEnv env $ fst param:getTyvars context
         context' <- bindKindVar env' context
-        param' <- map2 numToVarKind <$> (getKindVar env' $ fst param)
+        param' <- map2 numToVarKind <$> getKindVar env' (fst param)
         body' <- bindKindVar env' body
         return $ ClassDecl context' name param' body'
     bindKindVar env (InstanceDecl context name param body) = do
