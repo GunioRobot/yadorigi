@@ -42,7 +42,7 @@ instance BindKindVar Module where
         Module modname exports imports <$> bindKindVar env decls
 
 instance BindKindVar Decl where
-    bindKindVar env (Decl pos scope decl) = Decl pos scope <$> bindKindVar env decl
+    bindKindVar env (Decl pos decl) = Decl pos <$> bindKindVar env decl
 
 instance BindKindVar PrimDecl where
     bindKindVar env (DataDecl context name param body) = do
@@ -72,8 +72,8 @@ instance BindKindVar PrimDecl where
     bindKindVar env (TypeSignatureDecl name typename) = do
         env' <- addKindVarEnv env $ getTyvars typename
         TypeSignatureDecl name <$> bindKindVar env' typename
-    bindKindVar _ (BindDecl bind whereClause) =
-        liftM2 BindDecl (bindKindVar' bind) (bindKindVar' whereClause)
+    bindKindVar _ (BindDecl scope bind whereClause) =
+        liftM2 (BindDecl scope) (bindKindVar' bind) (bindKindVar' whereClause)
     bindKindVar _ decl = return decl
 
 instance BindKindVar Bind where
@@ -107,7 +107,7 @@ instance BindKindVar PrimExpr where
     bindKindVar _ (ListExpr expr) = ListExpr <$> mapM bindKindVar' expr
     bindKindVar _ (LambdaExpr lambda) = LambdaExpr <$> mapM bindKindVar' lambda
     bindKindVar _ (LetExpr scope lets expr) =
-        liftM2 (LetExpr scope) (mapM (mapM2 bindKindVar') lets) (bindKindVar' expr)
+        liftM2 (LetExpr scope) (mapM bindKindVar' lets) (bindKindVar' expr)
     bindKindVar _ (IfExpr c t f) = liftM3 IfExpr (bindKindVar' c) (bindKindVar' t) (bindKindVar' f)
     bindKindVar _ (CaseExpr expr pats) = liftM2 CaseExpr (bindKindVar' expr) (bindKindVar' pats)
     bindKindVar _ (TypeSignatureExpr expr typename) = do
