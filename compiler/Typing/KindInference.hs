@@ -23,22 +23,21 @@ import Yadorigi.Syntax
 
 data KindInferenceError = KindInferenceError deriving Show
 
-type TypeKindEnv = ((ModuleName,String),Kind)
-type KindInferenceMonad = StateT (IM.IntMap Kind,[TypeKindEnv],Int) (Either KindInferenceError)
+type Assump = ((ModuleName,String),Kind) -- Assumptions
+type KindInferenceMonad = StateT (IM.IntMap Kind,[Assump],Int) (Either KindInferenceError)
 
 addSubst :: Int -> Kind -> KindInferenceMonad Kind
 addSubst n kind@(VarKind m _)
     | m >= n = return kind
 addSubst n kind
-    | elem n (map fst (getKindvars kind)) = lift $ Left KindInferenceError -- Occurs check
+    | n `elem` map fst (getKindvars kind) = lift $ Left KindInferenceError -- Occurs check
     | otherwise = do
         kind' <- (IM.lookup n <$> sel1 <$> get) >>= maybe (return kind) (unify kind)
         stateTrans $ map1 $ IM.insert n kind'
         return kind'
-
-getKindvars :: Kind -> [(Int,String)]
-getKindvars kind = nubBy (on (==) fst) $ getKindvars' kind
     where
+        getKindvars :: Kind -> [(Int,String)]
+        getKindvars kind = nubBy (on (==) fst) $ getKindvars' kind
         getKindvars' :: Kind -> [(Int,String)]
         getKindvars' AstKind = []
         getKindvars' (FuncKind a b) = getKindvars' a++getKindvars' b
@@ -72,6 +71,8 @@ match' AstKind AstKind = return ()
 match' (FuncKind f a) (FuncKind g b) = match' f g >> match' a b
 match' (VarKind n _) kind = addSubst n kind >> return ()
 match' _ _ = lift $ Left KindInferenceError
+
+
 
 class KindInference a where
     unifyAll :: a -> KindInferenceMonad ()
