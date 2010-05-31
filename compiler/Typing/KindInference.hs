@@ -31,7 +31,10 @@ addSubst n kind@(VarKind m _)
     | m >= n = return kind
 addSubst n kind
     | elem n (map fst (getKindvars kind)) = lift $ Left KindInferenceError -- Occurs check
-    | otherwise = stateTrans (map1 (IM.insert n kind)) >> return kind
+    | otherwise = do
+        kind' <- (IM.lookup n <$> sel1 <$> get) >>= maybe (return kind) (unify kind)
+        stateTrans $ map1 $ IM.insert n kind'
+        return kind'
 
 getKindvars :: Kind -> [(Int,String)]
 getKindvars kind = nubBy (on (==) fst) $ getKindvars' kind
@@ -133,7 +136,21 @@ instance KindInference Lambda where
 instance KindInference CasePattern where
     unifyAll (CasePattern _ pat rhs) = unifyAll pat >> unifyAll rhs
 
+instance KindInference PatternMatch where
+    unifyAll (PatternMatch _ pattern) = unifyAll pattern
 
-instance KindInference' a => KindInference a where
-    unifyAll a = unifyAll' a >> return ()
+instance KindInference PrimPatternMatch where
+    unifyAll (DCPattern _ pat) = unifyAll pat
+    --unifyAll (LiteralPattern _) = return ()
+    unifyAll (DCOpPattern _ pat1 pat2) = unifyAll pat1 >> unifyAll pat2
+    unifyAll (NegativePattern pat) = unifyAll pat
+    unifyAll (ListPattern pat) = unifyAll pat
+    unifyAll (BindPattern _ pat) = unifyAll pat
+    unifyAll (ParenthesesPattern pat) = unifyAll pat
+    unifyAll (TypeSignaturePattern pat typename) =
+        unifyAll pat >> unifyAll' typename >>= unify' AstKind
+    unifyAll _ = return ()
+
+--instance KindInference' a => KindInference a where
+--    unifyAll a = unifyAll' a >> return ()
 

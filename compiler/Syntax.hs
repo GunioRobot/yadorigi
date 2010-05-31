@@ -175,7 +175,7 @@ data PrimPatternMatch
 instance Show PrimPatternMatch where
     show (DCPattern name pat) = "("++show name++concatMap ((' ':).show) pat++")"
     show (LiteralPattern literal) = show literal
-    show (DCOpPattern name expr1 expr2) = "("++show expr1++" "++show name++" "++show expr2++")"
+    show (DCOpPattern name pat1 pat2) = "("++show pat1++" "++show name++" "++show pat2++")"
     show (NegativePattern pat) = "-"++show pat
     show (ListPattern pat) = show pat
     show (BindPattern name pat) = "("++show name++maybe "" (("@"++).show) pat++")"
