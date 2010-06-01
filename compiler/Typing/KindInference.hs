@@ -12,7 +12,8 @@ import Data.Functor
 import Data.Function
 import Data.Foldable
 import Data.Traversable
-import qualified Data.IntMap as IM
+import qualified Data.Map as Map
+import qualified Data.IntMap as IMap
 import Data.Tuple.All
 import Control.Monad.State.Lazy hiding (mapM, mapM_, sequence, sequence_)
 
@@ -23,8 +24,9 @@ import Yadorigi.Syntax
 
 data KindInferenceError = KindInferenceError deriving Show
 
-type Assump = ((ModuleName,String),Kind) -- Assumptions
-type KindInferenceMonad = StateT (IM.IntMap Kind,[Assump],Int) (Either KindInferenceError)
+type Subst = IMap.IntMap Kind -- Substitution
+type Assump = Map.Map (ModuleName,String) Kind -- Assumptions
+type KindInferenceMonad = StateT (Subst,Assump,Int) (Either KindInferenceError)
 
 addSubst :: Int -> Kind -> KindInferenceMonad Kind
 addSubst n kind@(VarKind m _)
@@ -32,8 +34,8 @@ addSubst n kind@(VarKind m _)
 addSubst n kind
     | n `elem` map fst (getKindvars kind) = lift $ Left KindInferenceError -- Occurs check
     | otherwise = do
-        kind' <- (IM.lookup n <$> sel1 <$> get) >>= maybe (return kind) (unify kind)
-        stateTrans $ map1 $ IM.insert n kind'
+        kind' <- (IMap.lookup n <$> sel1 <$> get) >>= maybe (return kind) (unify kind)
+        stateTrans $ map1 $ IMap.insert n kind'
         return kind'
     where
         getKindvars :: Kind -> [(Int,String)]
@@ -42,6 +44,12 @@ addSubst n kind
         getKindvars' AstKind = []
         getKindvars' (FuncKind a b) = getKindvars' a++getKindvars' b
         getKindvars' (VarKind n s) = [(n,s)]
+
+addAssump :: (ModuleName,String) -> Kind -> KindInferenceMonad Kind
+addAssump name kind = do
+    kind' <- (Map.lookup name <$> sel2 <$> get) >>= maybe (return kind) (unify kind)
+    stateTrans $ map2 $ Map.insert name kind'
+    return kind'
 
 newKindVar :: KindInferenceMonad Int
 newKindVar = sel3 <$> fst <$> stateTrans (map3 (1+))
@@ -71,8 +79,6 @@ match' AstKind AstKind = return ()
 match' (FuncKind f a) (FuncKind g b) = match' f g >> match' a b
 match' (VarKind n _) kind = addSubst n kind >> return ()
 match' _ _ = lift $ Left KindInferenceError
-
-
 
 class KindInference a where
     unifyAll :: a -> KindInferenceMonad ()
