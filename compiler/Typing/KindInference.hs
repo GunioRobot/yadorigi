@@ -1,13 +1,11 @@
 
-{-# LANGUAGE FlexibleInstances,
-             UndecidableInstances,
-             OverlappingInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Yadorigi.Typing.KindInference where
 
 import Prelude hiding (foldl, foldl1, foldr, foldr1, mapM, mapM_, sequence, sequence_,
     concat, concatMap, and, or, any, all, sum, product, maximum, minimum, elem, notElem)
-import Data.List hiding (concatMap, elem, notElem)
+import Data.List hiding (foldl, foldl1, foldr, foldr1, concatMap, elem, notElem)
 import Data.Functor
 import Data.Function
 import Data.Foldable
@@ -51,6 +49,12 @@ addAssump name kind = do
     stateTrans $ map2 $ Map.insert name kind'
     return kind'
 
+lookupSubst :: Int -> KindInferenceMonad (Maybe Kind)
+lookupSubst n = IMap.lookup n <$> sel1 <$> get
+
+lookupAssump :: (ModuleName,String) -> KindInferenceMonad (Maybe Kind)
+lookupAssump name = Map.lookup name <$> sel2 <$> get
+
 newKindVar :: KindInferenceMonad Int
 newKindVar = sel3 <$> fst <$> stateTrans (map3 (1+))
 
@@ -80,84 +84,141 @@ match' (FuncKind f a) (FuncKind g b) = match' f g >> match' a b
 match' (VarKind n _) kind = addSubst n kind >> return ()
 match' _ _ = lift $ Left KindInferenceError
 
+infNullaryTypeCons :: KindInference' a => a -> KindInferenceMonad a
+infNullaryTypeCons typename = do
+    (typename',kind) <- kindInf' typename
+    unify' kind AstKind
+    return typename'
+
 class KindInference a where
-    unifyAll :: a -> KindInferenceMonad ()
+    kindInf :: a -> KindInferenceMonad a
 
 class KindInference' a where
-    unifyAll' :: a -> KindInferenceMonad Kind
+    kindInf' :: a -> KindInferenceMonad (a,Kind)
 
 instance (Traversable f,KindInference a) => KindInference (f a) where
-    unifyAll = mapM_ unifyAll
+    kindInf = mapM kindInf
 
 instance KindInference Module where
-    unifyAll (Module _ _ _ decls) = unifyAll decls
+    kindInf (Module modname exports imports decls) =
+        Module modname exports imports <$> kindInf decls
 
 instance KindInference Decl where
-    unifyAll (Decl _ decl) = unifyAll decl
+    kindInf (Decl pos decl) = Decl pos <$> kindInf decl
 
 instance KindInference PrimDecl where
-    unifyAll (DataDecl _ _ _ body) = unifyAll $ map snd body
-    unifyAll (TypeDecl _ _ typename) = unifyAll typename
-    unifyAll (ClassDecl _ _ _ decls) = unifyAll decls
-    unifyAll (InstanceDecl _ _ typename decls) = unifyAll typename >> unifyAll decls
-    unifyAll (BindDecl _ bind whereClause) = unifyAll bind >> unifyAll whereClause
-    unifyAll _ = return ()
+    kindInf (DataDecl context name@(ScopedName m _ n) params body) = do
+        context' <- kindInf context
+        params' <- mapM (mapM2 kindInf) params
+        body' <- mapM (mapM2 infNullaryTypeCons) body
+        addAssump (m,n) (foldr FuncKind AstKind (map sel2 params'))
+        return $ DataDecl context' name params' body
+    kindInf (TypeDecl name@(ScopedName m _ n) params typename) = do
+        params' <- mapM (mapM2 kindInf) params
+        (typename',kind) <- kindInf' typename
+        addAssump (m,n) (foldr FuncKind kind (map sel2 params'))
+        return $ TypeDecl name params' typename'
+    kindInf (ClassDecl context name@(ScopedName m _ n) param decls) = do
+        context' <- kindInf context
+        param'@(_,kind) <- mapM2 kindInf param
+        decls' <- kindInf decls
+        addAssump (m,n) kind
+        return $ ClassDecl context' name param' decls'
+    kindInf (InstanceDecl context name@(ScopedName m _ n) typename decls) = do
+        context' <- kindInf context
+        (typename',kind) <- kindInf' typename
+        decls' <- kindInf decls
+        lookupAssump (m,n) >>= mapM (unify' kind)
+        return $ InstanceDecl context' name typename' decls'
+    --kindInf decl@(FixityDecl _ _ _) = return decl
+    kindInf (TypeSignatureDecl name typename) =
+        TypeSignatureDecl name <$> infNullaryTypeCons typename
+    kindInf (BindDecl scopeNum bind whereClause) =
+        liftM2 (BindDecl scopeNum) (kindInf bind) (kindInf whereClause)
+    kindInf decl = return decl
 
 instance KindInference Bind where
-    unifyAll (Bind lhs rhs) = unifyAll lhs >> unifyAll rhs
+    kindInf (Bind lhs rhs) = liftM2 Bind (kindInf lhs) (kindInf rhs)
 
 instance KindInference Lhs where
-    unifyAll (FunctionLhs _ param) = unifyAll param
-    unifyAll (InfixLhs _ pat1 pat2) = unifyAll pat1 >> unifyAll pat2
-    unifyAll (PatternLhs pat) = unifyAll pat
+    kindInf (FunctionLhs name param) = FunctionLhs name <$> kindInf param
+    kindInf (InfixLhs name pat1 pat2) = liftM2 (InfixLhs name) (kindInf pat1) (kindInf pat2)
+    kindInf (PatternLhs pat) = PatternLhs <$> kindInf pat
 
 instance KindInference Rhs where
-    unifyAll (ExprRhs expr) = unifyAll expr
-    unifyAll (GuardRhs guard) = unifyAll guard
+    kindInf (ExprRhs expr) = ExprRhs <$> kindInf expr
+    kindInf (GuardRhs guard) = GuardRhs <$> kindInf guard
 
 instance KindInference Guard where
-    unifyAll (Guard cond expr) = unifyAll cond >> unifyAll expr
+    kindInf (Guard cond expr) = liftM2 Guard (kindInf cond) (kindInf expr)
 
 instance KindInference Expr where
-    unifyAll (Expr _ expr) = unifyAll expr
+    kindInf (Expr pos expr) = Expr pos <$> kindInf expr
 
 instance KindInference PrimExpr where
-    --unifyAll (LiteralExpr _) = return ()
-    --unifyAll (NameExpr _) = return ()
-    unifyAll (ApplyExpr expr1 expr2) = unifyAll expr1 >> unifyAll expr2
-    unifyAll (InfixExpr _ left right) = unifyAll left >> unifyAll right
-    unifyAll (NegativeExpr expr) = unifyAll expr
-    unifyAll (ParenthesesExpr expr) = unifyAll expr
-    unifyAll (ListExpr exprs) = unifyAll exprs
-    unifyAll (LambdaExpr lambda) = unifyAll lambda
-    unifyAll (LetExpr _ lets expr) = unifyAll lets >> unifyAll expr
-    unifyAll (IfExpr c t f) = unifyAll c >> unifyAll t >> unifyAll f
-    unifyAll (CaseExpr expr pat) = unifyAll expr >> unifyAll pat
-    unifyAll (TypeSignatureExpr expr typename) =
-        unifyAll expr >> unifyAll' typename >>= unify' AstKind
-    unifyAll _ = return ()
+    --kindInf expe@(LiteralExpr _) = return expr
+    --kindInf expe@(NameExpr _) = return expr
+    kindInf (ApplyExpr expr1 expr2) = liftM2 ApplyExpr (kindInf expr1) (kindInf expr2)
+    kindInf (InfixExpr op left right) = liftM2 (InfixExpr op) (kindInf left) (kindInf right)
+    kindInf (NegativeExpr expr) = NegativeExpr <$> kindInf expr
+    kindInf (ParenthesesExpr expr) = ParenthesesExpr <$> kindInf expr
+    kindInf (ListExpr exprs) = ListExpr <$> kindInf exprs
+    kindInf (LambdaExpr lambda) = LambdaExpr <$> kindInf lambda
+    kindInf (LetExpr scopeNum lets expr) = liftM2 (LetExpr scopeNum) (kindInf lets) (kindInf expr)
+    kindInf (IfExpr c t f) = liftM3 IfExpr (kindInf c) (kindInf t) (kindInf f)
+    kindInf (CaseExpr expr pat) = liftM2 CaseExpr (kindInf expr) (kindInf pat)
+    kindInf (TypeSignatureExpr expr typename) =
+        liftM2 TypeSignatureExpr (kindInf expr) (infNullaryTypeCons typename)
+    kindInf expr = return expr
 
 instance KindInference Lambda where
-    unifyAll (Lambda _ _ param expr) = unifyAll param >> unifyAll expr
+    kindInf (Lambda pos scopeNum param expr) =
+        liftM2 (Lambda pos scopeNum) (kindInf param) (kindInf expr)
 
 instance KindInference CasePattern where
-    unifyAll (CasePattern _ pat rhs) = unifyAll pat >> unifyAll rhs
+    kindInf (CasePattern scopeNum pat rhs) =
+        liftM2 (CasePattern scopeNum) (kindInf pat) (kindInf rhs)
 
 instance KindInference PatternMatch where
-    unifyAll (PatternMatch _ pattern) = unifyAll pattern
+    kindInf (PatternMatch pos pattern) = PatternMatch pos <$> kindInf pattern
 
 instance KindInference PrimPatternMatch where
-    unifyAll (DCPattern _ pat) = unifyAll pat
-    --unifyAll (LiteralPattern _) = return ()
-    unifyAll (DCOpPattern _ pat1 pat2) = unifyAll pat1 >> unifyAll pat2
-    unifyAll (NegativePattern pat) = unifyAll pat
-    unifyAll (ListPattern pat) = unifyAll pat
-    unifyAll (BindPattern _ pat) = unifyAll pat
-    unifyAll (ParenthesesPattern pat) = unifyAll pat
-    unifyAll (TypeSignaturePattern pat typename) =
-        unifyAll pat >> unifyAll' typename >>= unify' AstKind
-    unifyAll _ = return ()
+    kindInf (DCPattern name pat) = DCPattern name <$> kindInf pat
+    --kindInf pat@(LiteralPattern _) = return pat
+    kindInf (DCOpPattern op pat1 pat2) = liftM2 (DCOpPattern op) (kindInf pat1) (kindInf pat2)
+    kindInf (NegativePattern pat) = NegativePattern <$> kindInf pat
+    kindInf (ListPattern pat) = ListPattern <$> kindInf pat
+    kindInf (BindPattern name pat) = BindPattern name <$> kindInf pat
+    kindInf (ParenthesesPattern pat) = ParenthesesPattern <$> kindInf pat
+    kindInf (TypeSignaturePattern pat typename) =
+        liftM2 TypeSignaturePattern (kindInf pat) (infNullaryTypeCons typename)
+    kindInf pat = return pat
 
---instance KindInference' a => KindInference a where
---    unifyAll a = unifyAll' a >> return ()
+instance KindInference' QualDataType where
+    kindInf' (QualDataType pos context typename) = do
+        context' <- kindInf context
+        (typename',kind) <- kindInf' typename
+        return (QualDataType pos context' typename',kind)
+
+instance KindInference' DataType where
+    kindInf' (VarType kind str) = do
+        kind' <- kindInf kind
+        return (VarType kind' str,kind')
+    kindInf' (ConstructorType kind name) = do
+        kind' <- kindInf kind
+        return (ConstructorType kind' name,kind')
+    kindInf' (ReservedType kind str) = do
+        kind' <- kindInf kind
+        return (ReservedType kind' str,kind')
+    kindInf' (ApplyType cons param) = do
+        (cons',ckind) <- kindInf' cons
+        (param',pkind) <- kindInf' param
+        (,) (ApplyType cons' param') <$> case ckind of
+            (FuncKind f t) -> unify' f pkind >> return t
+            _ -> (\(FuncKind _ t) -> t) <$>
+                (flip FuncKind pkind <$> flip VarKind "" <$> newKindVar >>= unify ckind)
+    kindInf' (ListType typename) = flip (,) AstKind <$> infNullaryTypeCons typename
+    kindInf' (FunctionType t1 t2) =
+        flip (,) AstKind <$> liftM2 FunctionType (infNullaryTypeCons t1) (infNullaryTypeCons t2)
+    kindInf' (ParenthesesType typename) = kindInf' typename
 

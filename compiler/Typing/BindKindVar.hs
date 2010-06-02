@@ -147,7 +147,7 @@ instance BindKindVar QualDataType where
 
 instance BindKindVar TypeContext where
     bindKindVar env (TypeContext typeclass typename _) =
-        uncurry (TypeContext typeclass) <$> getKindVar env typename
+        TypeContext typeclass typename.flip VarKind "".snd <$> getKindVar env typename
 
 instance BindKindVar DataType where
     bindKindVar env (VarType _ typename) =

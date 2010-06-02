@@ -190,7 +190,7 @@ data QualDataType = QualDataType Position [TypeContext] DataType
 instance Show QualDataType where
     show (QualDataType _ context typename) = showContext context++show typename
 
-data TypeContext = TypeContext ScopedName String Int
+data TypeContext = TypeContext ScopedName String Kind
 
 instance Show TypeContext where
     show (TypeContext typeclass typename _) = show typeclass++" "++typename
