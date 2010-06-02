@@ -6,6 +6,7 @@ module Yadorigi.Typing.KindInference where
 import Prelude hiding (foldl, foldl1, foldr, foldr1, mapM, mapM_, sequence, sequence_,
     concat, concatMap, and, or, any, all, sum, product, maximum, minimum, elem, notElem)
 import Data.List hiding (foldl, foldl1, foldr, foldr1, concatMap, elem, notElem)
+import Data.Maybe
 import Data.Functor
 import Data.Function
 import Data.Foldable
@@ -110,7 +111,7 @@ instance KindInference PrimDecl where
     kindInf (DataDecl context name@(ScopedName m _ n) params body) = do
         context' <- kindInf context
         params' <- mapM (mapM2 kindInf) params
-        body' <- mapM (mapM2 infNullaryTypeCons) body
+        body' <- mapM (mapM2 (mapM infNullaryTypeCons)) body
         addAssump (m,n) (foldr FuncKind AstKind (map sel2 params'))
         return $ DataDecl context' name params' body
     kindInf (TypeDecl name@(ScopedName m _ n) params typename) = do
@@ -200,6 +201,10 @@ instance KindInference' QualDataType where
         (typename',kind) <- kindInf' typename
         return (QualDataType pos context' typename',kind)
 
+instance KindInference TypeContext where
+    kindInf (TypeContext name@(ScopedName m _ n) typename kind) =
+        TypeContext name typename <$> (lookupAssump (m,n) >>= maybe (return kind) (unify kind))
+
 instance KindInference' DataType where
     kindInf' (VarType kind str) = do
         kind' <- kindInf kind
@@ -221,4 +226,9 @@ instance KindInference' DataType where
     kindInf' (FunctionType t1 t2) =
         flip (,) AstKind <$> liftM2 FunctionType (infNullaryTypeCons t1) (infNullaryTypeCons t2)
     kindInf' (ParenthesesType typename) = kindInf' typename
+
+instance KindInference Kind where
+    kindInf AstKind = return AstKind
+    kindInf (FuncKind a b) = liftM2 FuncKind (kindInf a) (kindInf b)
+    kindInf kind@(VarKind n _) = fromMaybe kind <$> lookupSubst n
 
