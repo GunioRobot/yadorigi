@@ -15,3 +15,4 @@ iterateToConvergeM f a = do
 
 writeLater :: a
 writeLater = error "Yadorigi.Common.writeLater"
+

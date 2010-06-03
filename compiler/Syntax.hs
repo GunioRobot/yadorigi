@@ -5,7 +5,7 @@ import Data.List
 
 -- Module
 
-data Module = Module ModuleName (Maybe [ExportEntity]) [Import] [Decl]
+data Module = Module ModuleName (Maybe [ExportEntity]) [Import] [Decl] deriving Eq
 
 instance Show Module where
     show (Module modname exports imports decls) =
@@ -45,7 +45,7 @@ instance Show ImportEntity where
 
 -- Declaration
 
-data Decl = Decl Position PrimDecl
+data Decl = Decl Position PrimDecl deriving Eq
 
 instance Show Decl where
     show (Decl _ decl) = show decl
@@ -58,6 +58,7 @@ data PrimDecl
     | FixityDecl Fixity (Maybe Int) [ScopedName]
     | TypeSignatureDecl [ScopedName] QualDataType
     | BindDecl Int Bind [Decl]
+         deriving Eq
 
 instance Show PrimDecl where
     show (DataDecl context name param body) =
@@ -76,11 +77,11 @@ instance Show PrimDecl where
     show (BindDecl scope bind whereClause) =
         "#"++show scope++"# "++show bind++showWhereClause whereClause
 
-data Fixity = Infixl | Infix | Infixr deriving Show
+data Fixity = Infixl | Infix | Infixr deriving (Show,Eq)
 
 -- Lhs, Rhs, Bind
 
-data Bind = Bind Lhs Rhs
+data Bind = Bind Lhs Rhs deriving Eq
 
 instance Show Bind where
     show (Bind lhs rhs) = show lhs++" = "++show rhs
@@ -89,6 +90,7 @@ data Lhs
     = FunctionLhs ScopedName [PatternMatch]
     | InfixLhs ScopedName PatternMatch PatternMatch
     | PatternLhs PatternMatch
+         deriving Eq
 
 instance Show Lhs where
     show (FunctionLhs name param) = show name++concatMap ((' ':).show) param
@@ -98,19 +100,21 @@ instance Show Lhs where
 data Rhs
     = ExprRhs Expr
     | GuardRhs [Guard]
+         deriving Eq
 
 instance Show Rhs where
     show (ExprRhs expr) = show expr
     show (GuardRhs guard) = show guard
 
 data Guard = Guard Expr Expr
+         deriving Eq
 
 instance Show Guard where
     show (Guard cond expr) = "| "++show cond++" "++show expr
 
 -- Expression
 
-data Expr = Expr Position PrimExpr
+data Expr = Expr Position PrimExpr deriving Eq
 
 instance Show Expr where
     show (Expr _ primExpr) = show primExpr
@@ -128,6 +132,7 @@ data PrimExpr
     | IfExpr Expr Expr Expr {- if expression -}
     | CaseExpr Expr [CasePattern] {- case Expression -}
     | TypeSignatureExpr Expr QualDataType {- expression with data type information -}
+         deriving Eq
 
 instance Show PrimExpr where
     show (LiteralExpr literal) = show literal
@@ -143,20 +148,20 @@ instance Show PrimExpr where
     show (CaseExpr expr pat) = "(case "++show expr++" "++show pat++")"
     show (TypeSignatureExpr expr dataType) = "("++show expr++"::"++show dataType++")"
 
-data Lambda = Lambda Position Int [PatternMatch] Expr
+data Lambda = Lambda Position Int [PatternMatch] Expr deriving Eq
 
 instance Show Lambda where
     show (Lambda _ scope param expr) =
         "#"++show scope++"# "++intercalate " " (map show param)++" -> "++show expr
 
-data CasePattern = CasePattern Int PatternMatch Rhs
+data CasePattern = CasePattern Int PatternMatch Rhs deriving Eq
 
 instance Show CasePattern where
     show (CasePattern scope pattern expr) = "#"++show scope++"# "++show pattern++" "++show expr
 
 -- Pattern Match
 
-data PatternMatch = PatternMatch Position PrimPatternMatch
+data PatternMatch = PatternMatch Position PrimPatternMatch deriving Eq
 
 instance Show PatternMatch where
     show (PatternMatch _ pattern) = show pattern
@@ -171,6 +176,7 @@ data PrimPatternMatch
     | ParenthesesPattern PatternMatch {- Parentheses Pattern -}
     | TypeSignaturePattern PatternMatch QualDataType {- pattern with data type information -}
     | WildCardPattern {- wild card pattern -}
+         deriving Eq
 
 instance Show PrimPatternMatch where
     show (DCPattern name pat) = "("++show name++concatMap ((' ':).show) pat++")"
@@ -185,15 +191,16 @@ instance Show PrimPatternMatch where
 
 -- Data Type
 
-data QualDataType = QualDataType Position [TypeContext] DataType
+data QualDataType = QualDataType Position [TypeContext] DataType deriving Eq
 
 instance Show QualDataType where
     show (QualDataType _ context typename) = showContext context++show typename
 
-data TypeContext = TypeContext ScopedName String Kind
+data TypeContext = TypeContext ScopedName String Kind deriving Eq
 
 instance Show TypeContext where
-    show (TypeContext typeclass typename _) = show typeclass++" "++typename
+    show (TypeContext typeclass typename kind) =
+        show typeclass++" "++"("++typename++"::"++show kind++")"
 
 data DataType
     = VarType Kind String {- variable type -}
@@ -203,11 +210,12 @@ data DataType
     | ListType DataType {- list type -}
     | FunctionType DataType DataType {- function type -}
     | ParenthesesType DataType {- parentheses type -}
+         deriving Eq
 
 instance Show DataType where
-    show (VarType _ str) = str
-    show (ConstructorType _ name) = show name
-    show (ReservedType _ str) = str
+    show (VarType kind str) = "("++str++"::"++show kind++")"
+    show (ConstructorType kind name) = "("++show name++"::"++show kind++")"
+    show (ReservedType kind str) ="("++str++"::"++show kind++")" 
     show (ApplyType cons param) = "("++show cons++" "++show param++")"
     show (ListType param) = "["++show param++"]"
     show (FunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
@@ -217,6 +225,7 @@ data Kind
     = AstKind
     | FuncKind Kind Kind
     | VarKind Int String
+         deriving Eq
 
 instance Show Kind where
     show AstKind = "*"
