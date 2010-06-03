@@ -65,7 +65,7 @@ instance Show PrimDecl where
         "data "++showContext context++show name++concatMap ((' ':).fst) param++" = "++
         intercalate " | " (map (\(c,l) -> show c++concatMap ((' ':).show) l) body)
     show (TypeDecl name param typename) =
-        "type "++show name++intercalate " " (map fst param)++" = "++show typename
+        "type "++show name++concatMap ((' ':).fst) param++" = "++show typename
     show (ClassDecl context className typename body) =
         "class "++showContext context++show className++" "++fst typename++showWhereClause body
     show (InstanceDecl context className typename body) =

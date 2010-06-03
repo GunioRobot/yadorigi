@@ -15,6 +15,7 @@ import qualified Data.Map as Map
 import qualified Data.IntMap as IMap
 import Data.Tuple.All
 import Control.Monad.State.Lazy hiding (mapM, mapM_, sequence, sequence_)
+import System.IO.Unsafe
 
 import Yadorigi.Common
 import Yadorigi.Monad.Either
@@ -94,7 +95,7 @@ infNullaryTypeCons typename = do
 
 kindInfModules :: [Module] -> Either KindInferenceError [Module]
 kindInfModules modules = fst <$>
-    runStateT (bindKindVar' modules >>= iterateToConvergeM kindInf) (IMap.empty,Map.empty,0)
+    runStateT (bindKindVar' modules >>= iterateToConvergeST kindInf) (IMap.empty,Map.empty,0)
 
 class KindInference a where
     kindInf :: a -> KindInferenceMonad a
@@ -214,9 +215,10 @@ instance KindInference' DataType where
     kindInf' (VarType kind str) = do
         kind' <- kindInf kind
         return (VarType kind' str,kind')
-    kindInf' (ConstructorType kind name) = do
+    kindInf' (ConstructorType kind name@(ScopedName m _ n)) = do
         kind' <- kindInf kind
-        return (ConstructorType kind' name,kind')
+        kind'' <- lookupAssump (m,n) >>= maybe (return kind') (unify kind')
+        return (ConstructorType kind'' name,kind'')
     kindInf' (ReservedType kind str) = do
         kind' <- kindInf kind >>= unify (reservedTypeToKind str)
         return (ReservedType kind' str,kind')
