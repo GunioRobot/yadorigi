@@ -15,7 +15,6 @@ import qualified Data.Map as Map
 import qualified Data.IntMap as IMap
 import Data.Tuple.All
 import Control.Monad.State.Lazy hiding (mapM, mapM_, sequence, sequence_)
-import System.IO.Unsafe
 
 import Yadorigi.Common
 import Yadorigi.Monad.Either
@@ -56,7 +55,7 @@ lookupSubst :: Int -> KindInferenceMonad (Maybe Kind)
 lookupSubst n = IMap.lookup n <$> sel1 <$> get
 
 lookupAssump :: (ModuleName,String) -> KindInferenceMonad (Maybe Kind)
-lookupAssump name = Map.lookup name <$> sel2 <$> get
+lookupAssump name = (Map.lookup name <$> sel2 <$> get) >>= mapM renameKind
 
 newKindVar :: KindInferenceMonad Int
 newKindVar = sel3 <$> fst <$> stateTrans (map3 (1+))
@@ -86,6 +85,22 @@ match' AstKind AstKind = return ()
 match' (FuncKind f a) (FuncKind g b) = match' f g >> match' a b
 match' (VarKind n _) kind = addSubst n kind >> return ()
 match' _ _ = lift $ Left KindInferenceError
+
+renameKind :: Kind -> KindInferenceMonad Kind
+renameKind kind = fst <$> runStateT (renameKind' kind) IMap.empty
+    where
+        renameKind' :: Kind -> StateT (IMap.IntMap Int) KindInferenceMonad Kind
+        renameKind' AstKind = return AstKind
+        renameKind' (FuncKind a b) = liftM2 FuncKind (renameKind' a) (renameKind' b)
+        renameKind' (VarKind n s) = do
+            r <- IMap.lookup n <$> get
+            n' <- case r of
+                Nothing -> do
+                    n' <- lift $ newKindVar
+                    stateTrans $ IMap.insert n n'
+                    return n'
+                (Just n') -> return n'
+            return $ VarKind n' s
 
 infNullaryTypeCons :: KindInference' a => a -> KindInferenceMonad a
 infNullaryTypeCons typename = do
