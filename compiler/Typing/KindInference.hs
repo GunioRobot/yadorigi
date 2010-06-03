@@ -15,6 +15,7 @@ import qualified Data.Map as Map
 import qualified Data.IntMap as IMap
 import Data.Tuple.All
 import Control.Monad.State.Lazy hiding (mapM, mapM_, sequence, sequence_)
+import System.IO.Unsafe
 
 import Yadorigi.Common
 import Yadorigi.Monad.Either
@@ -29,8 +30,6 @@ type Assump = Map.Map (ModuleName,String) Kind -- Assumptions
 type KindInferenceMonad = StateT (Subst,Assump,Int) (Either KindInferenceError)
 
 addSubst :: Int -> Kind -> KindInferenceMonad Kind
-addSubst n kind@(VarKind m _)
-    | m >= n = return kind
 addSubst n kind
     | n `elem` map fst (getKindvars kind) = lift $ Left KindInferenceError -- Occurs check
     | otherwise = do
@@ -63,6 +62,10 @@ newKindVar = sel3 <$> fst <$> stateTrans (map3 (1+))
 unify :: Kind -> Kind -> KindInferenceMonad Kind
 unify AstKind AstKind = return AstKind
 unify (FuncKind f a) (FuncKind g b) = liftM2 FuncKind (unify f g) (unify a b)
+unify a@(VarKind n _) b@(VarKind m _)
+    | n < m = addSubst m a
+    | m > n = addSubst n b
+    | otherwise = return a
 unify (VarKind n _) kind = addSubst n kind
 unify kind (VarKind n _) = addSubst n kind
 unify _ _ = lift $ Left KindInferenceError
@@ -70,6 +73,10 @@ unify _ _ = lift $ Left KindInferenceError
 unify' :: Kind -> Kind -> KindInferenceMonad ()
 unify' AstKind AstKind = return ()
 unify' (FuncKind f a) (FuncKind g b) = unify' f g >> unify' a b
+unify' a@(VarKind n _) b@(VarKind m _)
+    | n < m = addSubst m a >> return ()
+    | m > n = addSubst n b >> return ()
+    | otherwise = return ()
 unify' (VarKind n _) kind = addSubst n kind >> return ()
 unify' kind (VarKind n _) = addSubst n kind >> return ()
 unify' _ _ = lift $ Left KindInferenceError
@@ -94,13 +101,12 @@ renameKind kind = fst <$> runStateT (renameKind' kind) IMap.empty
         renameKind' (FuncKind a b) = liftM2 FuncKind (renameKind' a) (renameKind' b)
         renameKind' (VarKind n s) = do
             r <- IMap.lookup n <$> get
-            n' <- case r of
+            flip VarKind s <$> case r of
                 Nothing -> do
                     n' <- lift $ newKindVar
                     stateTrans $ IMap.insert n n'
                     return n'
                 (Just n') -> return n'
-            return $ VarKind n' s
 
 infNullaryTypeCons :: KindInference' a => a -> KindInferenceMonad a
 infNullaryTypeCons typename = do
@@ -122,7 +128,8 @@ instance (Traversable f,KindInference a) => KindInference (f a) where
     kindInf = mapM kindInf
 
 instance KindInference Module where
-    kindInf (Module modname exports imports decls) =
+    kindInf mod@(Module modname exports imports decls) = do
+        let !_ = unsafePerformIO $ print mod
         Module modname exports imports <$> kindInf decls
 
 instance KindInference Decl where
