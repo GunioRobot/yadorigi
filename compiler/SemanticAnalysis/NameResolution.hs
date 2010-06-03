@@ -9,6 +9,7 @@ import Data.Function
 import Data.Traversable
 import Data.Tuple.All
 import Control.Monad.Reader hiding (mapM, sequence)
+--import System.IO.Unsafe
 
 import Yadorigi.Monad.Either
 import Yadorigi.Syntax
@@ -31,7 +32,7 @@ nameResolutionModule (mod,modname,names,types) =
         gnames = [name | name <- names', sel1 name == []]
         lnames = [ScopedName smodname [] name | (modname,smodname,name) <- names', null modname]
         types' = [(modname,smodname,name) | ((modname,name),_,smodname) <- types] in
-            nameResolution' (gnames,types',lnames) mod
+            nameResolution' (types',gnames,lnames) mod
 
 rewriteNameEnv :: [LNameEnv] -> [LNameEnv] -> [LNameEnv]
 rewriteNameEnv list names = foldl rewriteIter list names
@@ -42,6 +43,9 @@ rewriteNameEnv list names = foldl rewriteIter list names
 typeNameResolution :: ScopedName -> ReaderT NLState (Either NameResolutionError) ScopedName
 typeNameResolution (ScopedName modname _ name) = do
     (tnameEnv,_,_) <- ask
+    --let !_ = unsafePerformIO $ do
+    --        putStrLn $ (modname>>=(++"."))++name
+    --        putStrLn "tnameEnv : " >> print tnameEnv
     case [n | n <- tnameEnv, modname == sel1 n, name == sel3 n] of
         [n] -> return $ ScopedName (sel2 n) [] name
         _ -> lift $ Left NameResolutionError
@@ -49,6 +53,10 @@ typeNameResolution (ScopedName modname _ name) = do
 varNameResolution :: ScopedName -> ReaderT NLState (Either NameResolutionError) ScopedName
 varNameResolution name@(ScopedName modname _ str) = do
     (_,gnameEnv,lnameEnv) <- ask
+    --let !_ = unsafePerformIO $ do
+    --        putStrLn $ (modname>>=(++"."))++str
+    --        putStrLn "gnameEnv : " >> print gnameEnv
+    --        putStrLn "lnameEnv : " >> print lnameEnv
     let lsearch = case filter (on (==) (\(ScopedName _ _ s) -> s) name) lnameEnv of
             [ScopedName modname' scope _] -> return $ ScopedName modname' scope str
             _ -> Left NameResolutionError
@@ -72,7 +80,8 @@ instance NameResolution Module where
         Module modname exports imports <$> nameResolution decls
 
 instance NameResolution Decl where
-    nameResolution (Decl pos decl) = Decl pos <$> nameResolution decl
+    nameResolution (Decl pos decl) = do
+        Decl pos <$> nameResolution decl
 
 instance NameResolution PrimDecl where
     nameResolution (DataDecl context name param body) = do

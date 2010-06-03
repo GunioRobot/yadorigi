@@ -29,9 +29,10 @@ type ModuleInfo = (ModuleName,Maybe [ExportEntity],[Import],NameEnv String,NameE
 
 referModule :: [Module] ->
     Either ImportError [(Module,ModuleName,[NameInfo NameWithModule],[TypeNameInfo NameWithModule])]
-referModule modules =
-    zipWith (\mod (modname,_,_,_,(names,types)) -> (mod,modname,names,types)) modules <$>
+referModule modules = do
+    result <- zipWith (\mod (modname,_,_,_,(names,types)) -> (mod,modname,names,types)) modules <$>
         (mapM genModuleInfo modules>>=iterateToConvergeM referModuleIter)
+    return result
 
 genModuleInfo :: Module -> Either ImportError ModuleInfo
 genModuleInfo (Module modname exports imports body) = do
