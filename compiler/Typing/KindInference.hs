@@ -253,7 +253,7 @@ instance KindInference' DataType where
         (,) (ApplyType cons' param') <$> case ckind of
             (FuncKind f t) -> unify' f pkind >> return t
             _ -> (\(FuncKind _ t) -> t) <$>
-                (flip FuncKind pkind <$> flip VarKind "" <$> newKindVar >>= unify ckind)
+                (FuncKind pkind <$> flip VarKind "" <$> newKindVar >>= unify ckind)
     kindInf' (ListType typename) = flip (,) AstKind <$> infNullaryTypeCons typename
     kindInf' (FunctionType t1 t2) =
         flip (,) AstKind <$> liftM2 FunctionType (infNullaryTypeCons t1) (infNullaryTypeCons t2)
