@@ -15,7 +15,6 @@ import qualified Data.Map as Map
 import qualified Data.IntMap as IMap
 import Data.Tuple.All
 import Control.Monad.State.Lazy hiding (mapM, mapM_, sequence, sequence_)
-import System.IO.Unsafe
 
 import Yadorigi.Common
 import Yadorigi.Monad.Either
@@ -128,8 +127,7 @@ instance (Traversable f,KindInference a) => KindInference (f a) where
     kindInf = mapM kindInf
 
 instance KindInference Module where
-    kindInf mod@(Module modname exports imports decls) = do
-        let !_ = unsafePerformIO $ print mod
+    kindInf (Module modname exports imports decls) =
         Module modname exports imports <$> kindInf decls
 
 instance KindInference Decl where
