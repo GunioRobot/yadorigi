@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 import qualified Data.IntMap as IMap
 import Data.Tuple.All
 import Control.Monad.State.Lazy hiding (mapM, mapM_, sequence, sequence_)
---import System.IO.Unsafe
+import System.IO.Unsafe
 
 import Yadorigi.Common
 import Yadorigi.Monad.Either
@@ -33,7 +33,7 @@ addSubst :: Int -> Kind -> KindInferenceMonad Kind
 addSubst n kind
     | n `elem` map fst (getKindvars kind) = lift $ Left KindInferenceError -- Occurs check
     | otherwise = do
-        kind' <- (IMap.lookup n <$> sel1 <$> get) >>= maybe (return kind) (unify kind)
+        kind' <- lookupSubst n >>= maybe (return kind) (unify kind)
         stateTrans $ map1 $ IMap.insert n kind'
         return kind'
     where
@@ -114,15 +114,15 @@ infNullaryTypeCons typename = do
     unify' kind AstKind
     return typename'
 
-kindInfModules :: [Module] -> Either KindInferenceError [Module]
-kindInfModules modules = fst <$>
-    runStateT (bindKindVar' modules >>= iterateToConvergeST kindInf) (IMap.empty,Map.empty,0)
-
 --kindInfModules :: [Module] -> Either KindInferenceError [Module]
---kindInfModules modules = do
---    r <- runStateT (bindKindVar' modules >>= iterateToConvergeST kindInf) (IMap.empty,Map.empty,0)
---    let !_ = unsafePerformIO $ print $ sel2 $ snd r
---    return $ fst r
+--kindInfModules modules = fst <$>
+--    runStateT (bindKindVar' modules >>= iterateToConvergeST kindInf) (IMap.empty,Map.empty,0)
+
+kindInfModules :: [Module] -> Either KindInferenceError [Module]
+kindInfModules modules = do
+    r <- runStateT (bindKindVar' modules >>= iterateToConvergeST kindInf) (IMap.empty,Map.empty,0)
+    let !_ = unsafePerformIO $ print $ sel2 $ snd r
+    return $ fst r
 
 class KindInference a where
     kindInf :: a -> KindInferenceMonad a

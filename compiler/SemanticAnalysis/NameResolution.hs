@@ -21,7 +21,9 @@ data NameResolutionError = NameResolutionError deriving Show
 
 type GNameEnv = (ModuleName,ModuleName,String) -- Global Name Environment
 type LNameEnv = ScopedName -- Local Name Environment
-type NLState = ([GNameEnv],[GNameEnv],[LNameEnv])
+type NRState = ([GNameEnv],[GNameEnv],[LNameEnv])
+
+type NameResolutionMonad = ReaderT NRState (Either NameResolutionError)
 
 nameResolutionModule ::
     (Module,ModuleName,[NameInfo NameWithModule],[TypeNameInfo NameWithModule]) ->
@@ -40,7 +42,7 @@ rewriteNameEnv list names = foldl rewriteIter list names
         rewriteIter :: [LNameEnv] -> LNameEnv -> [LNameEnv]
         rewriteIter list name = name:filter (on (/=) (\(ScopedName _ _ s) -> s) name) list
 
-typeNameResolution :: ScopedName -> ReaderT NLState (Either NameResolutionError) ScopedName
+typeNameResolution :: ScopedName -> NameResolutionMonad ScopedName
 typeNameResolution (ScopedName modname _ name) = do
     (tnameEnv,_,_) <- ask
     --let !_ = unsafePerformIO $ do
@@ -50,7 +52,7 @@ typeNameResolution (ScopedName modname _ name) = do
         [n] -> return $ ScopedName (sel2 n) [] name
         _ -> lift $ Left NameResolutionError
 
-varNameResolution :: ScopedName -> ReaderT NLState (Either NameResolutionError) ScopedName
+varNameResolution :: ScopedName -> NameResolutionMonad ScopedName
 varNameResolution name@(ScopedName modname _ str) = do
     (_,gnameEnv,lnameEnv) <- ask
     --let !_ = unsafePerformIO $ do
@@ -66,10 +68,10 @@ varNameResolution name@(ScopedName modname _ str) = do
     lift (if null modname then lsearch else gsearch)
 
 class NameResolution a where
-    nameResolution :: a -> ReaderT NLState (Either NameResolutionError) a
-    nameResolution' :: NLState -> a -> Either NameResolutionError a
+    nameResolution :: a -> NameResolutionMonad a
+    nameResolution' :: NRState -> a -> Either NameResolutionError a
     nameResolution' st a = runReaderT (nameResolution a) st
-    nameResolutionT :: MonadTrans t => NLState -> a -> t (Either NameResolutionError) a
+    nameResolutionT :: MonadTrans t => NRState -> a -> t (Either NameResolutionError) a
     nameResolutionT st a = lift $ runReaderT (nameResolution a) st
 
 instance (Traversable f,NameResolution a) => NameResolution (f a) where

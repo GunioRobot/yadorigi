@@ -2,13 +2,13 @@
 module Nqueens where
 
 import Data.List
+import Control.Applicative
 import Control.Monad
 
 nqueensFilter :: [Int] -> Bool
-nqueensFilter [] = True
-nqueensFilter (x:xs)
-    | or $ zipWith (==) [1..] $ map (abs.subtract x) xs = False
-    | otherwise = nqueensFilter xs
+nqueensFilter = all f.tails where
+    f [] = True
+    f (x:xs) = and $ zipWith ((/=).abs.subtract x) xs [1..]
 
 nqueens :: Int -> [[Int]]
 nqueens n = filter nqueensFilter $ permutations [0..n-1]
@@ -18,3 +18,4 @@ nqueensInterface n cond  = foldr (\(x,y) -> filter $ (y==).(!!x)) (nqueens n) co
 
 main :: IO ()
 main = liftM2 nqueensInterface readLn readLn >>= print
+
