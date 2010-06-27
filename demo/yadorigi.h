@@ -7,7 +7,7 @@ typedef void (*free_t)(void *);
 
 int popen2(char *,FILE **,FILE **);
 
-unsigned int parray_length(void **);
+size_t parray_length(void **);
 
 /* parser */
 

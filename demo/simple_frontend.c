@@ -4,11 +4,6 @@
 #include <string.h>
 #include "yadorigi.h"
 
-typedef struct
-{
-	unsigned int x,y;
-} point_t;
-
 void *copy_with_alloc(const void *p,size_t size)
 {
 	void *temp = malloc(size);
@@ -65,7 +60,7 @@ void stream_redirect(FILE *in,FILE *out)
 
 int main(void)
 {
-	int *size,***points,getf;
+	int *size,***points,***result,getf;
 	size_t iter = 0;
 	FILE *pin,*pout;
 	size = fgetli(stdin);
@@ -94,13 +89,14 @@ int main(void)
 		}
 		iter++;
 	}
-	popen2("runhaskell ./nqueens.hs",&pout,&pin);
+	popen2("runghc ./nqueens.hs",&pout,&pin);
 	output_int(pin,size);
 	fputc('\n',pin);
 	output_iituplelist(pin,points);
 	fputc('\n',pin);
 	fclose(pin);
-	stream_redirect(pout,stdout);
+	result = parse_intlistlist(pout);
+	output_intlistlist(stdout,result);
 	fclose(pout);
 	return 0;
 }

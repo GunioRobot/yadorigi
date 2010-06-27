@@ -9,17 +9,6 @@
 #define DEFAULT_BOARD_SIZE 5
 #define MAX_BOARD_SIZE 32
 
-#define SWAP(a,b,size) \
-	do{ \
-		char *a_ = (char *)(a),*b_ = (char *)(b); \
-		size_t size_ = (size); \
-		while(size_--){ \
-			char temp = *a_; \
-			*a_++ = *b_; \
-			*b_++ = temp; \
-		} \
-	}while(0)
-
 typedef struct
 {
 	int x,y;
@@ -28,111 +17,6 @@ typedef struct
 int abs(int n)
 {
 	return 0 < n?n:-n;
-}
-
-size_t parray_length(void **array)
-{
-	size_t iter = 0;
-	while(array[iter])iter++;
-	return iter;
-}
-
-unsigned int fact(unsigned int n)
-{
-	unsigned int result = 1;
-	while(n){
-		result = result*n;
-		n--;
-	}
-	return result;
-}
-
-void *permutations(const void *array,size_t elem,size_t length,unsigned int index)
-{
-	void *result = malloc(elem*length);
-	size_t iter = 0;
-	if(!result){
-		return NULL;
-	}
-	memcpy(result,array,elem*length);
-	while(iter != length){
-		SWAP(result+elem*iter,result+elem*(iter+index%(length-iter)),elem);
-		index = index/(length-iter);
-		iter++;
-	}
-	return result;
-}
-
-int is_nqueens(size_t size,unsigned int *array)
-{
-	size_t iter1 = 0;
-	while(iter1 != size-1){
-		size_t iter2 = iter1+1;
-		while(iter2 != size){
-			if(iter2-iter1 == abs(array[iter2]-array[iter1])){
-				return 0;
-			}
-			iter2++;
-		}
-		iter1++;
-	}
-	return 1;
-}
-
-unsigned int **nqueens(size_t size)
-{
-	unsigned int
-		**result = NULL,
-		*array = malloc(sizeof(unsigned int)*size),
-		iter = 0,
-		iter_stop = fact(size),
-		result_iter = 0;
-	if(!array){
-		return NULL;
-	}
-	while(iter != size){
-		array[iter] = iter;
-		iter++;
-	}
-	iter = 0;
-	while(iter != iter_stop){
-		int *next_nqueens = permutations(array,sizeof(unsigned int),size,iter);
-		if(!next_nqueens){
-			goto ERROR;
-		}
-		if(is_nqueens(size,next_nqueens)){
-			if(result_iter%8 == 0){
-				unsigned int **temp = realloc(result,sizeof(unsigned int *)*(result_iter+8));
-				if(!temp){
-					free(next_nqueens);
-					goto ERROR;
-				}
-				result = temp;
-			}
-			result[result_iter] = next_nqueens;
-			result_iter++;
-		}
-		else{
-			free(next_nqueens);
-		}
-		iter++;
-	}
-	if(result_iter%8 == 0){
-		unsigned int **temp = realloc(result,sizeof(unsigned int *)*(result_iter+8));
-		if(!temp){
-			goto ERROR;
-		}
-		result = temp;
-	}
-	result[result_iter] = NULL;
-	return result;
-ERROR:
-	while(result_iter){
-		result_iter--;
-		free(result[result_iter]);
-	}
-	free(result);
-	return NULL;
 }
 
 unsigned int calc_pages(unsigned int all_items,unsigned page_items)
@@ -238,40 +122,73 @@ int input_nqueens_data(WINDOW *mainwin,size_t *size_,size_t *points_size,point_t
 	}
 }
 
-int result_filter(size_t size,size_t points_size,point_t *points,unsigned int *result)
+int get_result(size_t size,size_t points_size,point_t *points,int ***result)
 {
-	size_t iter = 0;
+	size_t iter = 0,iter_,result_size;
+	int hs_size = size,***hs_points = malloc(sizeof(int **)*(points_size+1))
+		,***hs_result,errcode;
+	FILE *pin,*pout;
+	if(!hs_points)return 0;
 	while(iter != points_size){
-		if(size <= points[iter].x || result[points[iter].x] != points[iter].y){
+		hs_points[iter] = malloc(sizeof(int *)*2);
+		if(!hs_points[iter]){
+			free_iituplelist(hs_points);
 			return 0;
 		}
+		hs_points[iter][0] = malloc(sizeof(int));
+		hs_points[iter][1] = malloc(sizeof(int));
+		if(!hs_points[iter][0] || !hs_points[iter][1]){
+			free(hs_points[iter][0]);
+			free(hs_points[iter][1]);
+			free(hs_points[iter]);
+			hs_points[iter] = NULL;
+			free_iituplelist(hs_points);
+			return 0;
+		}
+		*hs_points[iter][0] = points[iter].x;
+		*hs_points[iter][1] = points[iter].y;
 		iter++;
 	}
-	return 1;
-}
-
-int get_result(size_t size,size_t points_size,point_t *points,unsigned int ***result)
-{
-	size_t iter = 0,iter_ = 0;
-	*result = nqueens(size);
-	if(!*result){
+	hs_points[points_size] = NULL;
+	errcode = popen2("runyadorigi ./nqueens.hs",&pout,&pin);
+	if(errcode < 0){
+		free_iituplelist(hs_points);
 		return 0;
 	}
-	while((*result)[iter]){
-		if(result_filter(size,points_size,points,(*result)[iter])){
-			(*result)[iter_] = (*result)[iter];
-			iter_++;
+	output_int(pin,&hs_size);
+	fputc('\n',pin);
+	output_iituplelist(pin,hs_points);
+	fputc('\n',pin);
+	fclose(pin);
+	hs_result = parse_intlistlist(pout);
+	fclose(pout);
+	if(!hs_result)return 0;
+	result_size = parray_length((void **)hs_result);
+	*result = malloc(sizeof(int *)*(result_size+1));
+	if(!*result){
+		free_intlistlist(hs_result);
+		return 0;
+	}
+	iter = 0;
+	while(iter != result_size){
+		(*result)[iter] = malloc(sizeof(int)*size);
+		if(!(*result)[iter]){
+			while(iter--)free((*result)[iter]);
+			free(*result);
+			return 0;
 		}
-		else{
-			free((*result)[iter]);
+		iter_ = 0;
+		while(iter_ != size){
+			(*result)[iter][iter_] = *hs_result[iter][iter_];
+			iter_++;
 		}
 		iter++;
 	}
-	(*result)[iter_] = NULL;
+	(*result)[result_size] = NULL;
 	return 1;
 }
 
-int output_result(WINDOW *mainwin,size_t size,unsigned int **result)
+int output_result(WINDOW *mainwin,size_t size,int **result)
 {
 	size_t iter,iter_x,iter_y,page = 0,pages,page_items;
 	unsigned int mainwin_size_x,mainwin_size_y;
@@ -345,7 +262,7 @@ int output_result(WINDOW *mainwin,size_t size,unsigned int **result)
 	}
 }
 
-void free_result(unsigned int **result)
+void free_result(int **result)
 {
 	size_t iter = 0;
 	while(result[iter])free(result[iter++]);
@@ -359,7 +276,7 @@ int main(void)
 	cbreak();
 	noecho();
 	while(1){
-		unsigned int **result;
+		int **result;
 		size_t size,points_size;
 		point_t *points;
 		errcode = input_nqueens_data(stdscr,&size,&points_size,&points);

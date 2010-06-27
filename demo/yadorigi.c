@@ -56,12 +56,10 @@ int popen2(char *command,FILE **fr,FILE **fw)
 	Parser
 */
 
-unsigned int parray_length(void **array)
+size_t parray_length(void **array)
 {
 	size_t iter = 0;
-	while(array[iter]){
-		iter++;
-	}
+	while(array[iter])iter++;
 	return iter;
 }
 
@@ -134,7 +132,7 @@ void **parse_list(parser_t parse_child,free_t free_child,FILE *input)
 	}
 	while(1){
 		if(iter%8 == 0){
-			void **temp = realloc(result,sizeof(void *)*(iter+8));
+			void **temp = realloc(result,sizeof(void *)*(iter+9));
 			if(!temp){
 				goto ERROR;
 			}
