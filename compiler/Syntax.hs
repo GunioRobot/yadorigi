@@ -215,7 +215,7 @@ data DataType
 instance Show DataType where
     show (VarType kind str) = "("++str++"::"++show kind++")"
     show (ConstructorType kind name) = "("++show name++"::"++show kind++")"
-    show (ReservedType kind str) ="("++str++"::"++show kind++")" 
+    show (ReservedType kind str) ="("++str++"::"++show kind++")"
     show (ApplyType cons param) = "("++show cons++" "++show param++")"
     show (ListType param) = "["++show param++"]"
     show (FunctionType t1 t2) = "("++show t1++" -> "++show t2++")"
